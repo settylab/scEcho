@@ -21,3 +21,4 @@ src/scEcho.egg-info/top_level.txt
 notebooks/core
 notebooks/D59_retina.h5ad
 notebooks/.ipynb_checkpoints/example-checkpoint.ipynb
+scecho_package.zip

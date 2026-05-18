@@ -141,7 +141,7 @@ def plot_scores(
                 hover_name="feature",
             )
         fig.update_layout(autosize=False, width=1000, height=800, legend_title=None)
-        # fig.show()
+        fig.show()
 
     else:
         ax = sns.scatterplot(
@@ -203,7 +203,7 @@ def plot_scores(
                 **adjust_text_kwargs,
             )
 
-        return fig
+        return ax
     
     
     
