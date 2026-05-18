@@ -37,41 +37,7 @@ To install a specific tagged version:
 pip install git+https://github.com/settylab/scEcho.git@v0.0.5
 ```
 
-### Development install
 
-For an editable install with development tools:
-
-```bash
-git clone https://github.com/settylab/scEcho.git
-cd scEcho
-pip install -e ".[dev]"
-```
-
-## Usage
-
-```python
-import scecho
-
-scecho.impute
-scecho.density_comp
-scecho.plotting
-scecho.priming
-scecho.try_models
-scecho.utils
-scecho.layers
-scecho.test_components
-```
-
-## Modules
-
-- `density_comp` — density comparison utilities
-- `impute` — imputation routines
-- `layers` — AnnData layer helpers
-- `plotting` — plotting and visualization
-- `priming` — core priming analysis
-- `try_models` — model fitting / comparison
-- `utils` — shared utilities
-- `test_components` — component testing helpers
 
 ## License
 
