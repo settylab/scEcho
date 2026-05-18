@@ -25,48 +25,24 @@ expression and chromatin accessibility interact during cell-state transitions.
 
 ## Installation
 
-scEcho is installed directly from GitHub with `pip`.
-
-> **Note:** This repository is currently **private**. Installing it requires
-> GitHub credentials with access to the repo (an SSH key or a personal access
-> token). The plain `https` commands below only work once the repository is
-> public.
-
-### Install via SSH (recommended while private)
-
-If you have an SSH key set up with GitHub:
+Install directly from GitHub with `pip`:
 
 ```bash
-pip install git+ssh://git@github.com/ConnorFinkbeiner/scEcho.git
+pip install git+https://github.com/settylab/scEcho.git
 ```
 
-### Install via HTTPS with a personal access token
-
-Generate a token at **GitHub → Settings → Developer settings → Personal access
-tokens** with `repo` scope, then:
+To install a specific tagged version:
 
 ```bash
-pip install git+https://<YOUR_TOKEN>@github.com/ConnorFinkbeiner/scEcho.git
+pip install git+https://github.com/settylab/scEcho.git@v0.0.5
 ```
 
-### Install a specific version or branch
+### Development install
 
-Append `@` followed by a tag, branch, or commit:
-
-```bash
-pip install git+ssh://git@github.com/ConnorFinkbeiner/scEcho.git@v0.0.5
-```
-
-### Install via HTTPS (once the repository is public)
+For an editable install with development tools:
 
 ```bash
-pip install git+https://github.com/ConnorFinkbeiner/scEcho.git
-```
-
-### Development install (editable, with dev tools)
-
-```bash
-git clone git@github.com:ConnorFinkbeiner/scEcho.git
+git clone https://github.com/settylab/scEcho.git
 cd scEcho
 pip install -e ".[dev]"
 ```

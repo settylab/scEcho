@@ -8,14 +8,14 @@ version = "0.0.5"
 description = "A framework for identifying desynchronized cell states from paired single-cell RNA and ATAC data."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "GPL-3.0-or-later" }
+license = { text = "GPL-3.0-only" }
 authors = [
     { name = "Connor Finkbeiner" },
 ]
 keywords = ["single-cell", "genomics", "bioinformatics", "scanpy", "anndata"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
@@ -50,8 +50,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ConnorFinkbeiner/scEcho"
-Repository = "https://github.com/ConnorFinkbeiner/scEcho"
+Homepage = "https://github.com/settylab/scEcho"
+Repository = "https://github.com/settylab/scEcho"
 
 [tool.setuptools.packages.find]
 where = ["src"]
