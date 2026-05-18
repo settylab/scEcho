@@ -120,7 +120,7 @@ def dn_comp_obsm(
     # ── Compute density log fold change ───────────────────────────────────────
     lfc_key = f"density_lfc_{modality1_name}_vs_{modality2_name}"
     ad.obs[lfc_key] = (
-        ad.obs[f"log_density_{modality1_name}"] - ad.obs[f"log_density_{modality2_name}"]
+        ad.obs[f"log_density_{modality2_name}"] - ad.obs[f"log_density_{modality1_name}"] 
     )
     lfc = ad.obs[lfc_key]
 
@@ -180,7 +180,7 @@ def dn_comp_obsm(
 
     direction_key = f"direction_{modality1_name}_v_{modality2_name}"
     significant   = (np.abs(lfc) > log_fold_change_threshold) & (ml10pval > -np.log10(pval_threshold))
-    direction     = np.where(lfc > 0, f"{modality2_name} variability higher", f"{modality1_name} variability higher")
+    direction     = np.where(lfc < 0, f"{modality2_name} variability higher", f"{modality1_name} variability higher")
 
     ad.obs[direction_key] = np.where(significant, direction, "neutral")
 

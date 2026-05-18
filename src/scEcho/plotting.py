@@ -141,7 +141,7 @@ def plot_scores(
                 hover_name="feature",
             )
         fig.update_layout(autosize=False, width=1000, height=800, legend_title=None)
-        fig.show()
+        # fig.show()
 
     else:
         ax = sns.scatterplot(
@@ -203,7 +203,7 @@ def plot_scores(
                 **adjust_text_kwargs,
             )
 
-        return ax
+        return fig
     
     
     
@@ -815,3 +815,122 @@ def linked_plot(
     ax.set_title(title if title is not None else f"colored by {color_by}")
 
     return fig
+
+
+
+
+
+def plot_desynchronized_state_volcano(
+    ad,
+    hue_col,
+    modality1_name="RNA",
+    modality2_name="ATAC",
+    lfc_threshold=0.7,
+    pval_threshold=0.05,
+    palette=None,
+    sig_size=50,
+    bg_color="lightgrey",
+    figsize=None,
+    ax=None,
+):
+    """Volcano-style plot of density-comparison results.
+
+    Plots the density log-fold change between two modalities against its
+    significance. Non-significant cells (direction == "neutral") are drawn in
+    a flat background color; significant cells are colored by `hue_col`.
+    Threshold guide lines are drawn for the LFC cutoff and the p-value cutoff.
+
+    Parameters
+    ----------
+    ad : anndata.AnnData
+        The annotated data matrix. Expects density-comparison results in
+        ad.obs (e.g. from dn_comp_obsm).
+    hue_col : str
+        Column in ad.obs used to color significant points (e.g. "combo_type").
+    modality1_name : str
+        Name of the first modality; used to build column names.
+    modality2_name : str
+        Name of the second modality; used to build column names.
+    lfc_threshold : float
+        Absolute density LFC at which to draw the vertical guide lines.
+    pval_threshold : float
+        P-value at which to draw the horizontal guide line. The line is drawn
+        at -log10(pval_threshold).
+    palette : dict, str, or None
+        Palette for the significant points. If None, falls back to
+        ad.uns[f"{hue_col}_colors"] when present, otherwise lets seaborn pick.
+    sig_size : float
+        Marker size for significant points.
+    bg_color : str
+        Color for non-significant (background) points.
+    figsize : tuple or None
+        Figure size, used only when `ax` is None.
+    ax : matplotlib.axes.Axes or None
+        Axis to draw on. Created if None.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axis the plot was drawn on.
+    """
+    # ── Build column names from the modality pair ─────────────────────────────
+
+    pair          = f"{modality1_name}_vs_{modality2_name}"
+    direction_col = f"direction_{modality1_name}_v_{modality2_name}"
+    x_col         = f"density_lfc_{pair}"
+    y_col         = f"density_lfc_ml10pval_{pair}"
+
+    # ── Validate inputs ───────────────────────────────────────────────────────
+
+    for col in (direction_col, x_col, y_col, hue_col):
+        assert col in ad.obs.columns, (
+            f"'{col}' not found in ad.obs. Run the density comparison first."
+        )
+
+    # ── Resolve palette ───────────────────────────────────────────────────────
+
+    if palette is None:
+        colors_key = f"{hue_col}_colors"
+        palette = ad.uns.get(colors_key, None)
+
+    # ── Split significant vs. background cells ────────────────────────────────
+
+    msk = ad.obs[direction_col] != "neutral"
+
+    # ── Plot ──────────────────────────────────────────────────────────────────
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize or (6, 5))
+
+    # Background: non-significant cells, drawn first so they sit underneath.
+    sns.scatterplot(
+        ad.obs.loc[~msk],
+        x=x_col,
+        y=y_col,
+        color=bg_color,
+        linewidth=0,
+        ax=ax,
+    )
+
+    # Foreground: significant cells, colored by hue_col.
+    sns.scatterplot(
+        ad.obs.loc[msk],
+        x=x_col,
+        y=y_col,
+        hue=hue_col,
+        palette=palette,
+        linewidth=0,
+        s=sig_size,
+        ax=ax,
+    )
+
+    # ── Threshold guide lines ─────────────────────────────────────────────────
+
+    ax.axvline(-lfc_threshold, color="black", linestyle="--")
+    ax.axvline(lfc_threshold, color="black", linestyle="--")
+    ax.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+
+    ax.set_xlabel(f"density LFC ({modality1_name} vs {modality2_name})")
+    ax.set_ylabel("-log10 p-value")
+
+    return ax

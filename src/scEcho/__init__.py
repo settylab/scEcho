@@ -1,8 +1,8 @@
 __version__ = "0.0.5"
 __author__  = "Connor Finkbeiner"
 
-from . import density_comp
-from . import impute
+from . import Echo_states
+from . import Echo_features
 from . import plotting
 from . import try_models
 from . import utils

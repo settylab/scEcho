@@ -139,180 +139,10 @@ def embeddings_predict_layer(
                 np.asarray(np.maximum(ov, 1e-8))
             )
     
-
-        
-        
-        
-        
-        
-        
-def min_max_scaler(ad, layer, quantile=0.99):
-    """Scale a layer to [0, 1] (assuming quantile is 1) using min and quantile normalization.
-
-    Subtracts the per-feature minimum then divides by the per-feature quantile.
-    Scale factors are stored in ad.varm["uncertainty_scale_factors"] for use
-    in downstream uncertainty comparisons across layers.
-
-    Parameters
-    ----------
-    ad : anndata.AnnData
-        The annotated data matrix.
-    layer : str
-        Key in ad.layers to scale.
-    quantile : float
-        Upper quantile used as the scale factor (default 0.99).
-
-    Returns
-    -------
-    Adds ad.layers[f"{layer}_scaled"] with values scaled to [0, 1] (assuming quantile is 1).
-    Updates ad.varm["uncertainty_scale_factors"] with per-feature scale factors.
-    """
-
-    # ── Validate inputs ───────────────────────────────────────────────────────
-
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. "
-        f"Available layers: {list(ad.layers.keys())}"
-    )
-    assert not sparse.issparse(ad.layers[layer]), (
-        f"Layer '{layer}' is sparse — min_max_scaler expects dense input. "
-        f"Run embeddings_predict_layer on layer '{layer}' and pass the imputed layer instead."
-    )
-
-    # ── Scale ─────────────────────────────────────────────────────────────────
-
-    scaled_layer = f"{layer}_scaled"
-    vals = ad.layers[layer] - ad.layers[layer].min(axis=0)
-    scale_factors = np.quantile(vals, quantile, axis=0)
-
-    ad.layers[scaled_layer] = vals / scale_factors
-
-    # ── Store scale factors ───────────────────────────────────────────────────
-
-    varm_key = "uncertainty_scale_factors"
-    if varm_key not in ad.varm:
-        ad.varm[varm_key] = pd.DataFrame(
-            scale_factors,
-            index=ad.var_names,
-            columns=[layer],
-        )
-    else:
-        ad.varm[varm_key][layer] = scale_factors
-        
-        
-
-    
-        
-
-        
-# TODO fix naming, make saclaing optional
-def compare_layers_cellwise(ad,
-                 layer1 = "mellon_imputed_expression_rna_scaled",
-                 layer2 = "mellon_imputed_SEAscore_atac_scaled",
-                  new_layer_name = "priming",
-                 eps = 1e-12):
-    
-    """
-     Given two layers that have been imputed by embeddings_predict_layer over a
-    shared embedding space, computes a per-cell, per-feature comparison of the
-    two modalities. The comparison accounts for the uncertainty in each GP
-    prediction, allowing cells where the two modalities are significantly
-    discordant to be distinguished from cells where the difference is within
-    the expected noise.
-
-    Parameters
-    ----------
-    ad : anndata.AnnData
-        The annotated data matrix.
-    layer1 : str
-        The name of the layer where imputed gene expression data is stored.
-    gene_score_layer : str
-        The name of the layer where imputed gene scores are stored.
-    new_layer_name : str
-        The name of the layer where the diffrence between the expression layer and gene score layer is stored
-    eps : float
-        Small constant to stabilize numerical operations, default is 1e-12.
-
-    Returns
-    -------
-    
-    """
-    
-    exp_prefix = layer1.split("_scaled")[0]
-    gs_prefix = layer2.split("_scaled")[0]
-    
-    # Make sure layers are scaled
-    assert "_scaled" in layer1, f"The expression layer does not appear to be scaled plase run min_max_scaler on {layer1}"
-    assert "_scaled" in layer2, f"The gene score layer does not appear to be scaled plase run min_max_scaler on {layer2}"
-
-    assert "uncertainty_scale_factors" in ad.varm.keys(), "gene-wise and feature set wise scale factors not found in ad.varm[\'uncertainty_scale_factors\']. Please use min_max_scaler or store your scale factors in ad.varm[\'uncertainty_scale_factors\']"
-
-    # TODO: make these explanations better
-    assert exp_prefix in ad.varm["uncertainty_scale_factors"].columns, f"no scale factors found for {exp_prefix} in ad.varm[\'uncertainty_scale_factors\']"
-    assert gs_prefix in ad.varm["uncertainty_scale_factors"].columns, f"no scale factors found for {gs_prefix} in ad.varm[\'uncertainty_scale_factors\']"
-    
-    
-    
-    # first get uncertanty
-    exp_unc = ((ad.obsp[f"{exp_prefix}_uncertainty"].diagonal() * np.ones((ad.shape[1], ad.shape[0]))).T * np.square(ad.varm["uncertainty_scale_factors"][exp_prefix].values))
-    atac_unc = ((ad.obsp[f"{gs_prefix}_uncertainty"].diagonal() * np.ones((ad.shape[1], ad.shape[0]))).T * np.square(ad.varm["uncertainty_scale_factors"][gs_prefix].values))
-    
-    sd = np.sqrt(exp_unc + atac_unc + eps)
-    
-    ad.layers[new_layer_name] = ad.layers[layer1] - ad.layers[layer2]
-    ad.layers[f"{new_layer_name}_deviations"] = ad.layers[new_layer_name]/sd
-    
-    ad.layers[f"{new_layer_name}_pval"] = np.zeros(ad.shape)
-    for i in tqdm(range(ad.shape[1])):
-        ad.layers[f"{new_layer_name}_pval"][:,i] = np.minimum(normal.logcdf(ad.layers[f"{new_layer_name}_deviations"][:,i]), 
-                                                    normal.logcdf(-ad.layers[f"{new_layer_name}_deviations"][:,i])) + np.log(2)
-    
-    ad.layers[f"{new_layer_name}_ml10pval"] = -ad.layers[f"{new_layer_name}_pval"] / np.log(10)
-    
     
 
     
-    
 
-    
-# # TODO: clean this up
-# def run_desynch_full(ad, 
-#                      ls, 
-#                      sigma,
-#                      refrence_space,
-#                      other_space,
-#                      layer = "logcounts", 
-#                      gp_type = None,
-#                     ls_var_scaling_factor = 1.5):
-    
-    
-#     #TODO: do this once
-#     # ref_landmarks = mellon.parameters.compute_landmarks(ad.obsm[refrence_space])
-#     # other_landmarks =  mellon.parameters.compute_landmarks(ad.obsm[other_space])
-    
-    
-#     modality_predict_layer(ad,
-#                            ls = ls, 
-#                            sigma = sigma, 
-#                            modalities = (refrence_space, 
-#                                              other_space),
-#                            layer =layer, 
-#                            gp_type = gp_type)
-    
-    
-#     ls_var = ls * ls_var_scaling_factor
-#     est_desynch_features(ad,
-#                          refrence_space = refrence_space,
-#                          other_space = other_space,
-#                          ls = ls_var,
-#                          sigma = sigma, #TODO: adjust this
-#                          gp_type=gp_type, 
-#                         orig_layer = layer)
-    
-    
-    
-    
-    
 
     
 def get_desynch_stats(
@@ -813,6 +643,137 @@ def run_null_desynch_test(
     ]
 
 
+
+
+
+
+
+def run_echo_features(
+    ad,
+    obs_col,
+    layers,
+    embedding1="DM_EigenVectors_RNA",
+    embedding2="DM_EigenVectors_ATAC",
+    modality1="RNA",
+    modality2="ATAC",
+    sigma=0.1,
+    ls=None,
+    ls_factor=10,
+    p_val_threshold=0.05,
+    random_state=0,
+    min_cells=50,
+    eps=1e-16,
+    verbose=True,
+):
+    """Run the full desynchronization pipeline across one or more layers.
+
+    For each layer in `layers`, this runs the three pipeline steps in order:
+      1. embeddings_predict_layer  -- impute the layer over both embeddings
+      2. get_desynch_stats         -- compute per-feature desynch statistics
+      3. run_null_desynch_test     -- test significance against a null model
+
+    
+
+    Parameters
+    ----------
+    ad : anndata.AnnData
+        The annotated data matrix. Modified in place.
+    obs_col : str
+        Column in ad.obs used to group cells (passed as obs_col / "combo_type").
+    layers : str or sequence of str
+        Layer key, or a list/tuple of layer keys, in ad.layers to process.
+    embedding1, embedding2 : str
+        Keys in ad.obsm for the two embedding spaces.
+    modality1, modality2 : str
+        Display names for the two modalities.
+    sigma : float
+        Prior std used for both embeddings_predict_layer and the null test.
+    ls : float or None
+        Length scale used for the GP fit. None lets the estimator choose.
+    ls_factor : float
+        Length scale factor.
+    p_val_threshold : float
+        Two-sided p-value threshold for the null test.
+    random_state : int
+        Random seed for the null layer shuffling.
+    min_cells : int
+        Minimum cells per group for the null test.
+    eps : float
+        Small constant for numerical stability.
+    verbose : bool
+        Print progress per layer.
+
+    Returns
+    -------
+    None. Updates `ad` in place; see the individual functions for the keys
+    written to ad.layers, ad.obsp, and ad.varm.
+    """
+    # Accept a single layer string or a collection of them.
+    if isinstance(layers, str):
+        layers = [layers]
+    else:
+        layers = list(layers)
+
+    embeddings = (embedding1, embedding2)
+
+    for layer in layers:
+        if layer not in ad.layers:
+            raise KeyError(
+                f"Layer '{layer}' not found in ad.layers. "
+                f"Available layers: {list(ad.layers.keys())}"
+            )
+
+        if verbose:
+            print(f"[run_desynch_full] Processing layer: '{layer}'")
+
+        # 1. Impute the layer over both embedding spaces.
+        if verbose:
+            print("  - embeddings_predict_layer")
+        embeddings_predict_layer(
+            ad,
+            embeddings=embeddings,
+            sigma=sigma,
+            ls=ls,
+            ls_factor=ls_factor,
+            layer=layer,
+        )
+
+        # 2. Per-feature desynchronization statistics.
+        if verbose:
+            print("  - get_desynch_stats")
+        get_desynch_stats(
+            ad,
+            obs_col=obs_col,
+            layer=layer,
+            modality1=modality1,
+            modality2=modality2,
+            embedding1=embedding1,
+            embedding2=embedding2,
+            eps=eps,
+        )
+
+        # 3. Null model significance test.
+        if verbose:
+            print("  - run_null_desynch_test")
+        run_null_desynch_test(
+            ad,
+            obs_col,
+            layer,
+            sigma=sigma,
+            ls=ls,
+            ls_factor=ls_factor,
+            modality1=modality1,
+            modality2=modality2,
+            embedding1=embedding1,
+            embedding2=embedding2,
+            p_val_threshold=p_val_threshold,
+            random_state=random_state,
+            min_cells=min_cells,
+            eps=eps,
+        )
+
+        if verbose:
+            print(f"[run_desynch_full] Done with layer: '{layer}'")
 
 
 

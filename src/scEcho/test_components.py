@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 import scipy.sparse as sparse
-from .impute import embeddings_predict_layer
+from .Echo_features import embeddings_predict_layer
 
 
 
