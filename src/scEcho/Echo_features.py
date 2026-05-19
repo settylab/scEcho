@@ -180,7 +180,55 @@ def embeddings_predict_layer(
     
 
 
-    
+
+
+def _compute_group_mhd_and_stats(
+    ad,
+    ind,
+    layer,
+    layer_for_lfc,
+    embedding1,
+    embedding2,
+    diagonal_variance,
+):
+    """Per-group Mahalanobis distance with graceful fallback when covariance keys are absent.
+
+    Pulled out of ``get_desynch_stats`` and ``run_null_desynch_test`` to remove
+    ~80 LOC of duplication and the silent-divergence risk between the two
+    near-identical blocks.
+
+    ``layer`` is the namespace of the predicted-space uncertainty keys in
+    ``ad.obsp`` (e.g. ``layer`` for the observed pass, ``null_layer`` for the
+    null pass). ``layer_for_lfc`` is the namespace of the precomputed LFC layer
+    in ``ad.layers`` (always the *observed* layer in current call sites, since
+    the null path reuses the observed LFC values against the null covariance).
+
+    Returns either a ``float64`` ``(n_group,)`` array of Mahalanobis distances,
+    or ``np.nan`` (with a ``UserWarning``) when the predicted-covariance keys
+    for either embedding are not present in ``ad.obsp``.
+    """
+    unc_key1 = f"predicted_{layer}_{embedding1}_space_uncertainty"
+    unc_key2 = f"predicted_{layer}_{embedding2}_space_uncertainty"
+    if (unc_key1 in ad.obsp) and (unc_key2 in ad.obsp):
+        ix = np.ix_(ind.values, ind.values)
+        unc1 = ad.obsp[unc_key1][ix]
+        unc2 = ad.obsp[unc_key2][ix]
+        # Kompot handles Cholesky stabilization internally (eps=1e-8 default).
+        return compute_mahalanobis_distances(
+            diff_values=ad[ind].layers[f"predicted_{layer_for_lfc}_LFC_{embedding1}_v_{embedding2}"].T,
+            covariance=unc1 + unc2,
+            diagonal_variance=diagonal_variance,
+        )
+    missing_unc = [k for k in [unc_key1, unc_key2] if k not in ad.obsp]
+    warnings.warn(
+        f"Posterior covariance keys not found in ad.obsp — Mahalanobis "
+        f"distance skipped for this group. To enable, rerun "
+        f"embeddings_predict_layer with save_covariance=True.\n"
+        f"\tMissing: {missing_unc}"
+    )
+    return np.nan
+
+
 def get_desynch_stats(
     ad: anndata.AnnData,
     obs_col: str,
@@ -310,37 +358,14 @@ def get_desynch_stats(
             )
             diagonal_variance = None
         
-        # Model uncertainty — guarded against missing keys (when
-        # save_covariance=False was passed to embeddings_predict_layer) and
-        # indexed via the underlying obsp ndarray rather than a boolean-
-        # masked AnnData view (avoids ImplicitModificationWarning on
-        # AnnData ≥0.8).
-        unc_key1 = f"predicted_{layer}_{embedding1}_space_uncertainty"
-        unc_key2 = f"predicted_{layer}_{embedding2}_space_uncertainty"
+        # Model uncertainty + Mahalanobis distance (guarded against missing
+        # obsp keys when save_covariance=False was passed to
+        # embeddings_predict_layer).
+        res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = _compute_group_mhd_and_stats(
+            ad, ind, layer, layer, embedding1, embedding2, diagonal_variance,
+        )
 
-        if (unc_key1 in ad.obsp) and (unc_key2 in ad.obsp):
-            ix = np.ix_(ind.values, ind.values)
-            unc1 = ad.obsp[unc_key1][ix]
-            unc2 = ad.obsp[unc_key2][ix]
 
-            # ── Mahalanobis distance ───────────────────────────────────────────
-            # Kompot handles Cholesky stabilization internally (eps=1e-8 default).
-            res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
-                diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-                covariance=unc1 + unc2,
-                diagonal_variance=diagonal_variance,
-            )
-        else:
-            missing_unc = [k for k in [unc_key1, unc_key2] if k not in ad.obsp]
-            warnings.warn(
-                f"Posterior covariance keys not found in ad.obsp — Mahalanobis "
-                f"distance skipped for group '{c}'. To enable, rerun "
-                f"embeddings_predict_layer with save_covariance=True.\n"
-                f"\tMissing: {missing_unc}"
-            )
-            res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = np.nan
-        
-        
 
         # ── Additional per-group layer statistics ──────────────────────────────
 
@@ -683,37 +708,13 @@ def run_null_desynch_test(
             )
             diagonal_variance = None
         
-        # Model uncertainty — guarded against missing keys (when
-        # save_covariance=False was passed to embeddings_predict_layer) and
-        # indexed via the underlying obsp ndarray rather than a boolean-
-        # masked AnnData view (avoids ImplicitModificationWarning on
-        # AnnData ≥0.8).
-        unc_key1 = f"predicted_{null_layer}_{embedding1}_space_uncertainty"
-        unc_key2 = f"predicted_{null_layer}_{embedding2}_space_uncertainty"
-
-        diff = ad[ind].layers[f"predicted_{null_layer}_{embedding1}_space_residuals"] - ad[ind].layers[f"predicted_{null_layer}_{embedding2}_space_residuals"]
-
-        if (unc_key1 in ad.obsp) and (unc_key2 in ad.obsp):
-            ix = np.ix_(ind.values, ind.values)
-            unc1 = ad.obsp[unc_key1][ix]
-            unc2 = ad.obsp[unc_key2][ix]
-
-            # ── Mahalanobis distance ───────────────────────────────────────────
-            # Kompot handles Cholesky stabilization internally (eps=1e-8 default).
-            res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
-                diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-                covariance=unc1 + unc2,
-                diagonal_variance=diagonal_variance,
-            )
-        else:
-            missing_unc = [k for k in [unc_key1, unc_key2] if k not in ad.obsp]
-            warnings.warn(
-                f"Posterior covariance keys not found in ad.obsp — null "
-                f"Mahalanobis distance skipped for group '{c}'. To enable, "
-                f"rerun embeddings_predict_layer with save_covariance=True.\n"
-                f"\tMissing: {missing_unc}"
-            )
-            res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = np.nan
+        # Model uncertainty + Mahalanobis distance against the null covariance.
+        # Uncertainty keys live in the null namespace; the LFC layer is the
+        # observed one (the null pass reuses observed LFC values against the
+        # null covariance).
+        res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = _compute_group_mhd_and_stats(
+            ad, ind, null_layer, layer, embedding1, embedding2, diagonal_variance,
+        )
         
         
 
