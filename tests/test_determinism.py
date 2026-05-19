@@ -27,8 +27,8 @@ def test_dn_comp_obsm_is_deterministic():
     a1 = _build_adata(seed=0)
     a2 = _build_adata(seed=0)
 
-    scEcho.Echo_states.dn_comp_obsm(a1, ls_factor=2, log_fold_change_threshold=0.5)
-    scEcho.Echo_states.dn_comp_obsm(a2, ls_factor=2, log_fold_change_threshold=0.5)
+    scEcho.echo_states.dn_comp_obsm(a1, ls_factor=2, log_fold_change_threshold=0.5)
+    scEcho.echo_states.dn_comp_obsm(a2, ls_factor=2, log_fold_change_threshold=0.5)
 
     numeric_cols = [
         "log_density_RNA",

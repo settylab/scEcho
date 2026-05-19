@@ -27,7 +27,7 @@ def adata_with_desynch_features(synthetic_adata):
 def adata_with_dn_comp(synthetic_adata):
     """Fixture with dn_comp_obsm results in obs (used by plot_direction_fractions
     and plot_desynchronized_state_volcano)."""
-    scEcho.Echo_states.dn_comp_obsm(
+    scEcho.echo_states.dn_comp_obsm(
         synthetic_adata, ls_factor=2, log_fold_change_threshold=0.5,
         optimizer="L-BFGS-B",
     )

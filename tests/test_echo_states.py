@@ -1,4 +1,4 @@
-"""Tests for `scEcho.Echo_states` — currently `dn_comp_obsm` only.
+"""Tests for `scEcho.echo_states` — currently `dn_comp_obsm` only.
 
 Two-tier: smoke (function runs, expected columns added) + correctness
 (numeric output matches hardcoded baseline captured on first green run).
@@ -20,7 +20,7 @@ pytestmark = pytest.mark.slow
 
 
 def test_smoke_dn_comp_obsm_writes_expected_obs_columns(synthetic_adata):
-    scEcho.Echo_states.dn_comp_obsm(
+    scEcho.echo_states.dn_comp_obsm(
         synthetic_adata,
         ls_factor=2,
         log_fold_change_threshold=0.5,
@@ -53,7 +53,7 @@ def test_correctness_dn_comp_obsm_values(synthetic_adata):
     and `optimizer="L-BFGS-B"`. Tolerance: rtol=1e-4 (Mellon L-BFGS has
     minor numerical jitter across jax/jaxopt patch versions).
     """
-    scEcho.Echo_states.dn_comp_obsm(
+    scEcho.echo_states.dn_comp_obsm(
         synthetic_adata,
         ls_factor=2,
         log_fold_change_threshold=0.5,
