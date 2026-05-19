@@ -54,7 +54,7 @@ pip install -e ".[dev]"
 
 ## Modules
 
-Imported as `import scEcho` (capital E):
+Imported as `import scEcho`:
 
 - `Echo_states` — per-modality density estimation and cross-modality density
   comparison; writes per-cell direction labels into `.obs`.
@@ -65,8 +65,7 @@ Imported as `import scEcho` (capital E):
 - `try_models` — hyperparameter sweep over Mellon GP settings.
 - `utils` — Palantir wrapper, embedding-depth regression, AnnData layer
   helpers.
-- `test_components` — diffusion-component sweep (not a pytest suite, despite
-  the name).
+- `test_components` — diffusion-component sweep.
 
 ## Usage
 
