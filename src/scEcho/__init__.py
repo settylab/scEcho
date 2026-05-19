@@ -7,15 +7,13 @@ except PackageNotFoundError:
 
 __author__ = "Connor Finkbeiner"
 
-from . import Echo_features, Echo_states, plotting, test_components, try_models, utils
+from . import Echo_features, Echo_states, plotting, utils
 
 __all__ = [
     "Echo_states",
     "Echo_features",
     "plotting",
-    "try_models",
     "utils",
-    "test_components",
     "__version__",
     "__author__",
 ]

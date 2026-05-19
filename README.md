@@ -62,10 +62,8 @@ Imported as `import scEcho`:
   per-feature statistics, null-model significance testing).
 - `plotting` — visualization (volcano plots, linked side-by-side embeddings,
   per-group direction fractions).
-- `try_models` — hyperparameter sweep over Mellon GP settings.
 - `utils` — Palantir wrapper, embedding-depth regression, AnnData layer
-  helpers.
-- `test_components` — diffusion-component sweep.
+  helpers, Mellon GP hyperparameter sweep, and diffusion-component sweep.
 
 ## Usage
 
