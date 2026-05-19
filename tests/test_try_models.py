@@ -55,7 +55,7 @@ def test_correctness_try_models_error_var_ratio_values(adata_after_try_models):
 
 
 def test_try_models_invalid_layer_raises(synthetic_adata):
-    with pytest.raises(AssertionError):
+    with pytest.raises(KeyError):
         scEcho.try_models.try_models(
             synthetic_adata, ls_vals=[1.0], sigmas=[0.1],
             layer="not_a_layer",
@@ -102,5 +102,5 @@ def test_correctness_plot_model_heatmap_axis_labels(adata_after_try_models):
 
 def test_plot_model_heatmap_unknown_embedding_raises(adata_after_try_models):
     res = scEcho.try_models.read_test_results(adata_after_try_models, layer="L")
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         scEcho.try_models.plot_model_heatmap(res, embedding="NOT_AN_EMBEDDING")

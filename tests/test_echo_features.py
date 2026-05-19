@@ -233,7 +233,7 @@ def test_get_reconstruction_results_filters_to_group(synthetic_adata):
     for col in sub.columns:
         assert "_combo_type_A" in col, f"unexpected column for group A: {col}"
     # asking for a group that doesn't exist raises
-    with pytest.raises(AssertionError):
+    with pytest.raises(KeyError):
         scEcho.Echo_features.get_reconstruction_results(
             synthetic_adata, layer="L", grouping="combo_type", group="Z",
         )
