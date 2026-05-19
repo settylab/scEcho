@@ -1,23 +1,38 @@
+from __future__ import annotations
+
+import warnings
+from typing import Optional, Union
+
+import anndata
+import matplotlib.pyplot as plt
+import numpy as np
 import palantir
 import pandas as pd
-import warnings
-import matplotlib.pyplot as plt
 import scanpy as sc
 import sklearn
-import numpy as np
-from scipy.stats import spearmanr
+from matplotlib.figure import Figure
 from scipy.sparse import csr_matrix
+from scipy.stats import spearmanr
+
+__all__ = [
+    "run_and_store_pr_res",
+    "plot_branch_comp",
+    "regress_embedding",
+    "calc_corr",
+    "df_to_adata_layer",
+]
 
 
 
-def run_and_store_pr_res(ad,
-                        term_cells_series,
-                        start_celltype,
-                        DM_comp_multiscaled,
-                         num_waypoints = 500,
-                        modality = None,
+def run_and_store_pr_res(
+    ad: anndata.AnnData,
+    term_cells_series: pd.Series,
+    start_celltype: str,
+    DM_comp_multiscaled: str,
+    num_waypoints: int = 500,
+    modality: Optional[str] = None,
     **kwargs,
-):
+) -> None:
     pr_res = palantir.core.run_palantir(
         ad,
         term_cells_series.loc[term_cells_series == start_celltype].index[0],
@@ -65,17 +80,17 @@ def run_and_store_pr_res(ad,
     
     
 def plot_branch_comp(
-    ad,
-    branch_name,
-    pseudotime_col=None,
-    modality1="RNA",
-    modality2="ATAC",
-    vline_locs=None,
-    color_by=None,
-    layer=None,
-    sort_order=False,
-    figsize=None,
-):
+    ad: anndata.AnnData,
+    branch_name: str,
+    pseudotime_col: Optional[str] = None,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    vline_locs: Optional[Union[float, list]] = None,
+    color_by: Optional[str] = None,
+    layer: Optional[str] = None,
+    sort_order: bool = False,
+    figsize: Optional[tuple] = None,
+) -> Figure:
     """Plot branch probabilities over pseudotime for two modalities.
 
     Creates a two-panel figure showing branch probabilities for modality2
@@ -194,9 +209,11 @@ def plot_branch_comp(
     
                     
 
-def regress_embedding(ad,
-                      emb_key,
-                     depth_col):
+def regress_embedding(
+    ad: anndata.AnnData,
+    emb_key: str,
+    depth_col: str,
+) -> None:
     """
     Calculates the correlation between and embedding in ad.obsm and a read deth column (such as total_counts, nFrags) in obs.
 
@@ -232,9 +249,11 @@ def regress_embedding(ad,
     
     
     
-def calc_corr(ad,
-             emb,
-             depth_col):
+def calc_corr(
+    ad: anndata.AnnData,
+    emb: str,
+    depth_col: str,
+) -> pd.DataFrame:
     """
     Calculates the correlation between and embedding in ad.obsm and a read deth column (such as total_counts, nFrags) in obs.
 
@@ -271,7 +290,12 @@ def calc_corr(ad,
     
 
     
-def df_to_adata_layer(adata, df, layer_name, sparse=False):
+def df_to_adata_layer(
+    adata: anndata.AnnData,
+    df: pd.DataFrame,
+    layer_name: str,
+    sparse: bool = False,
+) -> None:
     """Add a dataframe as a new layer in an AnnData object.
 
     Aligns df to adata's obs/var indices, filling missing cells/features with NaN.

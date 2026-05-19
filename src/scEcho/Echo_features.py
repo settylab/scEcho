@@ -1,15 +1,32 @@
+from __future__ import annotations
+
+import logging
+import re
 import warnings
+from typing import Optional, Sequence, Union
+
+import anndata
 import mellon
 import numpy as np
 import pandas as pd
-import scipy.sparse as sparse
-from tqdm.auto import tqdm
 import scipy
+import scipy.sparse as sparse
 from kompot.utils import compute_mahalanobis_distances
-from statsmodels.stats.multitest import multipletests
 from pandas.api.types import CategoricalDtype
 from scipy.stats import norm as normal
-import re
+from statsmodels.stats.multitest import multipletests
+from tqdm.auto import tqdm
+
+__all__ = [
+    "embeddings_predict_layer",
+    "get_desynch_stats",
+    "make_null_layer",
+    "run_null_desynch_test",
+    "run_echo_features",
+    "get_reconstruction_results",
+]
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -33,16 +50,16 @@ def compute_ncells(ad_sub, layer_key, col_name, res):
 
 
 def embeddings_predict_layer(
-    ad,
-    ls=None,
-    ls_factor=10,
-    sigma=0.1,
-    embeddings=("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
-    layer=None,
-    gp_type=None,
+    ad: anndata.AnnData,
+    ls: Optional[float] = None,
+    ls_factor: float = 10,
+    sigma: float = 0.1,
+    embeddings: Union[str, Sequence[str]] = ("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
+    layer: Optional[str] = None,
+    gp_type: Optional[str] = None,
     # loo_residuals = True,
-    save_obs_variance=True
-):
+    save_obs_variance: bool = True,
+) -> None:
     """Impute a layer in ad.layers over a given space (or spaces) using a Gaussian process.
 
     Parameters
@@ -146,16 +163,16 @@ def embeddings_predict_layer(
 
     
 def get_desynch_stats(
-    ad,
-    obs_col,
-    layer,
-    modality1="RNA",
-    modality2="ATAC",
-    embedding1="DM_EigenVectors_RNA",
-    embedding2="DM_EigenVectors_ATAC",
-    extra_ncells_layers=[],
-    eps=1e-16,
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    layer: str,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    embedding1: str = "DM_EigenVectors_RNA",
+    embedding2: str = "DM_EigenVectors_ATAC",
+    extra_ncells_layers: Union[str, Sequence[str]] = [],
+    eps: float = 1e-16,
+) -> None:
     """Compute per-feature desynchronization statistics between two modalities, grouped by a cell annotation.
 
     For each group in obs_col, computes mean squared error of each embedding's reconstruction,
@@ -345,7 +362,7 @@ def get_desynch_stats(
 
         
         
-def make_null_layer(ad, layer, random_state=0):
+def make_null_layer(ad: anndata.AnnData, layer: str, random_state: int = 0) -> None:
     """Create a null layer by randomly shuffling layer values across cells per feature.
 
     Parameters
@@ -394,21 +411,21 @@ def make_null_layer(ad, layer, random_state=0):
 
 
 def run_null_desynch_test(
-    ad,
-    obs_col,
-    layer,
-    ls=None,
-    ls_factor=10,
-    sigma=0.1,
-    modality1="RNA",
-    modality2="ATAC",
-    embedding1="DM_EigenVectors_RNA",
-    embedding2="DM_EigenVectors_ATAC",
-    p_val_threshold=0.05,
-    random_state=0,
-    min_cells=50,
-    eps=1e-16
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    layer: str,
+    ls: Optional[float] = None,
+    ls_factor: float = 10,
+    sigma: float = 0.1,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    embedding1: str = "DM_EigenVectors_RNA",
+    embedding2: str = "DM_EigenVectors_ATAC",
+    p_val_threshold: float = 0.05,
+    random_state: int = 0,
+    min_cells: int = 50,
+    eps: float = 1e-16,
+) -> None:
     """Run a null model test for desynchronization statistics.
 
     Creates a null layer by shuffling feature values across cells, runs the
@@ -649,22 +666,22 @@ def run_null_desynch_test(
 
 
 def run_echo_features(
-    ad,
-    obs_col,
-    layers,
-    embedding1="DM_EigenVectors_RNA",
-    embedding2="DM_EigenVectors_ATAC",
-    modality1="RNA",
-    modality2="ATAC",
-    sigma=0.1,
-    ls=None,
-    ls_factor=10,
-    p_val_threshold=0.05,
-    random_state=0,
-    min_cells=50,
-    eps=1e-16,
-    verbose=True,
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    layers: Union[str, Sequence[str]],
+    embedding1: str = "DM_EigenVectors_RNA",
+    embedding2: str = "DM_EigenVectors_ATAC",
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    sigma: float = 0.1,
+    ls: Optional[float] = None,
+    ls_factor: float = 10,
+    p_val_threshold: float = 0.05,
+    random_state: int = 0,
+    min_cells: int = 50,
+    eps: float = 1e-16,
+    verbose: bool = True,
+) -> None:
     """Run the full desynchronization pipeline across one or more layers.
 
     For each layer in `layers`, this runs the three pipeline steps in order:
@@ -723,12 +740,11 @@ def run_echo_features(
                 f"Available layers: {list(ad.layers.keys())}"
             )
 
-        if verbose:
-            print(f"[run_desynch_full] Processing layer: '{layer}'")
+        log = logger.info if verbose else logger.debug
+        log("[run_desynch_full] Processing layer: '%s'", layer)
 
         # 1. Impute the layer over both embedding spaces.
-        if verbose:
-            print("  - embeddings_predict_layer")
+        log("  - embeddings_predict_layer")
         embeddings_predict_layer(
             ad,
             embeddings=embeddings,
@@ -739,8 +755,7 @@ def run_echo_features(
         )
 
         # 2. Per-feature desynchronization statistics.
-        if verbose:
-            print("  - get_desynch_stats")
+        log("  - get_desynch_stats")
         get_desynch_stats(
             ad,
             obs_col=obs_col,
@@ -753,8 +768,7 @@ def run_echo_features(
         )
 
         # 3. Null model significance test.
-        if verbose:
-            print("  - run_null_desynch_test")
+        log("  - run_null_desynch_test")
         run_null_desynch_test(
             ad,
             obs_col,
@@ -772,15 +786,20 @@ def run_echo_features(
             eps=eps,
         )
 
-        if verbose:
-            print(f"[run_desynch_full] Done with layer: '{layer}'")
+        log("[run_desynch_full] Done with layer: '%s'", layer)
 
 
 
 
 
 
-def get_reconstruction_results(ad, layer, grouping, group, min_cells=None):
+def get_reconstruction_results(
+    ad: anndata.AnnData,
+    layer: str,
+    grouping: str,
+    group: str,
+    min_cells: Optional[int] = None,
+) -> pd.DataFrame:
     """Pull reconstruction results for a specific group from ad.varm.
 
     Parameters
