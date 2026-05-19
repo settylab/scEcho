@@ -146,7 +146,7 @@ def dn_comp_obsm(
                 min_cells = sv_min_cells,
                 estimator_kwargs={"d": d_use},
             )
-            ad.obs[f"log_density_{modality}_sample_var"] = model.predict(space, diag=True)
+            ad.obs[f"log_density_{modality}_sample_var"] = model.predict(space, diag=True).ravel()
 
         variance_model = (variance_model + 
                           ad.obs[f"log_density_{modality1_name}_sample_var"] + 
