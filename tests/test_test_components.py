@@ -54,12 +54,12 @@ def test_correctness_collect_sweep_residual_means(synthetic_adata):
 
 
 def test_sweep_diffusion_components_bad_min_components(synthetic_adata):
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         scEcho.test_components.sweep_diffusion_components(
             synthetic_adata, layer="L", obsm_key="DM_EigenVectors_RNA",
             min_components=1,
         )
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         scEcho.test_components.sweep_diffusion_components(
             synthetic_adata, layer="L", obsm_key="DM_EigenVectors_RNA",
             min_components=999,

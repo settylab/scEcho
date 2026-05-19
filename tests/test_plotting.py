@@ -98,7 +98,7 @@ def test_correctness_plot_direction_fractions_axis_shape(adata_with_dn_comp):
 
 def test_plot_direction_fractions_missing_obs_raises(synthetic_adata):
     """Without dn_comp_obsm first, the required obs column doesn't exist."""
-    with pytest.raises(AssertionError):
+    with pytest.raises(KeyError):
         scEcho.plotting.plot_direction_fractions(synthetic_adata, obs_col="combo_type")
 
 
