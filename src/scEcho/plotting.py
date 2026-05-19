@@ -142,6 +142,7 @@ def plot_scores(
             )
         fig.update_layout(autosize=False, width=1000, height=800, legend_title=None)
         fig.show()
+        return fig
 
     else:
         ax = sns.scatterplot(
