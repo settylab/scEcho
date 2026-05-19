@@ -638,13 +638,10 @@ def run_null_desynch_test(
 
         # ── Null distribution summary statistics ──────────────────────────────
 
+        # Zero-variance features are filtered silently — the user does not need
+        # to be told per-group; the count is recoverable from the layer if
+        # needed.
         expressed_mask = null_var > 0
-        n_excluded     = (~expressed_mask).sum()
-        if n_excluded > 0:
-            warnings.warn(
-                f"{n_excluded} features have zero variance in group '{c}' of layer '{null_layer}' "
-                f"and will be excluded from null mean/SD calculation."
-            )
 
         null_vals_expressed = res.loc[expressed_mask, null_col]
         null_mean           = null_vals_expressed.mean()
