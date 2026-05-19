@@ -1,9 +1,6 @@
 name: test
 
-on:
-  push:
-    branches: ["**"]
-  pull_request:
+on: [push, pull_request]
 
 jobs:
   pytest:
@@ -27,8 +24,18 @@ jobs:
       - name: Install package + dev extras (wheels only)
         run: uv pip install --system --only-binary=:all: -e ".[dev]"
 
-      - name: Run pytest
-        run: pytest -v -m "not slow" tests/
+      - name: Run tests with coverage
+        run: pytest -v -m "not slow" --cov=scEcho --cov-report=xml --cov-report=term tests/
+
+      - name: Upload coverage to Codecov
+        if: env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run ruff (warn-only)
         run: ruff check --exit-zero src/ tests/
