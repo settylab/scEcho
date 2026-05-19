@@ -70,7 +70,7 @@ Imported as `import scEcho` (capital E):
 
 ## Usage
 
-See `notebooks/example.ipynb` for the canonical end-to-end pipeline. The basic
+See [`notebooks/example.ipynb`](notebooks/example.ipynb) for the canonical end-to-end pipeline. The basic
 shape is `scEcho.Echo_states.dn_comp_obsm(adata, ...)` followed by
 `scEcho.Echo_features.run_echo_features(adata, ...)`; see each function's
 docstring for the required `.obsm` / `.obs` / `.layers` keys.
