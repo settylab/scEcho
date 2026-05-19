@@ -56,7 +56,13 @@ def run_and_store_pr_res(ad,
         warnings.warn(f"Overwriting existing columns in ad.obs: {existing}")
         ad.obs.drop(columns=existing, inplace=True)
 
-    ad.obs = pd.concat((ad.obs, pr_res.branch_probs, masks), axis=1)
+    # column-wise assignment preserves existing categorical dtypes; whole-row
+    # `ad.obs = pd.concat(...)` has historically dropped them via the
+    # AnnData setter
+    for col in pr_res.branch_probs.columns:
+        ad.obs[col] = pr_res.branch_probs[col]
+    for col in masks.columns:
+        ad.obs[col] = masks[col]
     
     
     
