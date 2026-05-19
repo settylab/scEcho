@@ -279,9 +279,10 @@ def get_desynch_stats(
         
         
         # ── Mahalanobis distance ───────────────────────────────────────────────
+        # Kompot handles Cholesky stabilization internally (eps=1e-8 default).
         res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
             diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-            covariance=unc1 + unc2 + 1e-16,
+            covariance=unc1 + unc2,
             diagonal_variance=diagonal_variance,
         )
         
@@ -628,9 +629,10 @@ def run_null_desynch_test(
         
         diff = ad[ind].layers[f"predicted_{null_layer}_{embedding1}_space_residuals"] - ad[ind].layers[f"predicted_{null_layer}_{embedding2}_space_residuals"]
         # ── Mahalanobis distance ───────────────────────────────────────────────
+        # Kompot handles Cholesky stabilization internally (eps=1e-8 default).
         res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
             diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-            covariance=unc1 + unc2 + 1e-16,
+            covariance=unc1 + unc2,
             diagonal_variance=diagonal_variance,
         )
         
