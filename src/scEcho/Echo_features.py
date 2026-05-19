@@ -271,10 +271,12 @@ def get_desynch_stats(
             )
             diagonal_variance = None
         
-        # Model uncertainty
-
-        unc1 = ad[ind].obsp[f"predicted_{layer}_{embedding1}_space_uncertainty"]
-        unc2 = ad[ind].obsp[f"predicted_{layer}_{embedding2}_space_uncertainty"]
+        # Model uncertainty — index the underlying obsp ndarray rather than
+        # going through a boolean-masked AnnData view (avoids
+        # ImplicitModificationWarning on AnnData ≥0.8)
+        ix = np.ix_(ind.values, ind.values)
+        unc1 = ad.obsp[f"predicted_{layer}_{embedding1}_space_uncertainty"][ix]
+        unc2 = ad.obsp[f"predicted_{layer}_{embedding2}_space_uncertainty"][ix]
 
         
         
@@ -620,10 +622,12 @@ def run_null_desynch_test(
             )
             diagonal_variance = None
         
-        # Model uncertainty
-
-        unc1 = ad[ind].obsp[f"predicted_{null_layer}_{embedding1}_space_uncertainty"]
-        unc2 = ad[ind].obsp[f"predicted_{null_layer}_{embedding2}_space_uncertainty"]
+        # Model uncertainty — index the underlying obsp ndarray rather than
+        # going through a boolean-masked AnnData view (avoids
+        # ImplicitModificationWarning on AnnData ≥0.8)
+        ix = np.ix_(ind.values, ind.values)
+        unc1 = ad.obsp[f"predicted_{null_layer}_{embedding1}_space_uncertainty"][ix]
+        unc2 = ad.obsp[f"predicted_{null_layer}_{embedding2}_space_uncertainty"][ix]
 
         
         diff = ad[ind].layers[f"predicted_{null_layer}_{embedding1}_space_residuals"] - ad[ind].layers[f"predicted_{null_layer}_{embedding2}_space_residuals"]
