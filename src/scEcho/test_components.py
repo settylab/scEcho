@@ -1,23 +1,28 @@
-import numpy as np
+from __future__ import annotations
+
+from typing import Optional
+
+import anndata
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from tqdm import tqdm
 import scipy.sparse as sparse
+from tqdm import tqdm
+
 from .Echo_features import embeddings_predict_layer
+
+__all__ = ["sweep_diffusion_components", "collect_sweep_residual_means"]
 
 
 
 def sweep_diffusion_components(
-    ad,
-    layer,
-    obsm_key,
-    ls=None,
-    ls_factor=1,
-    sigma=0.1,
-    gp_type=None,
-    min_components=2,
-):
+    ad: anndata.AnnData,
+    layer: str,
+    obsm_key: str,
+    ls: Optional[float] = None,
+    ls_factor: float = 1,
+    sigma: float = 0.1,
+    gp_type: Optional[str] = None,
+    min_components: int = 2,
+) -> None:
     """Run embeddings_predict_layer across a sweep of diffusion component counts.
 
     For each n from min_components to the total number of components in obsm_key,
@@ -102,11 +107,11 @@ def sweep_diffusion_components(
     
     
 def collect_sweep_residual_means(
-    ad,
-    layer,
-    obsm_key,
-    min_components=2,
-):
+    ad: anndata.AnnData,
+    layer: str,
+    obsm_key: str,
+    min_components: int = 2,
+) -> pd.DataFrame:
     """Collect mean residuals per gene across the diffusion component sweep.
 
     For each component count in the sweep output of sweep_diffusion_components,

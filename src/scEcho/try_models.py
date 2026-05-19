@@ -1,26 +1,37 @@
-from tqdm.auto import tqdm
+from __future__ import annotations
+
+import logging
+import warnings
+from typing import Optional, Sequence
+
+import anndata
+import matplotlib.pyplot as plt
+import mellon
 import numpy as np
 import pandas as pd
-import mellon
-import warnings
-from scipy import sparse
-import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.axes import Axes
+from scipy import sparse
+from tqdm.auto import tqdm
+
+__all__ = ["try_models", "read_test_results", "plot_model_heatmap"]
+
+logger = logging.getLogger(__name__)
 
 
 
 def try_models(
-    ad,
-    ls_vals,
-    sigmas,
-    layer,
-    embeddings=("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
-    name_dict=None,
-    loo_residuals=True,
-    groups=None,
-    test_frac=0.2,
-    random_state=0,
-):
+    ad: anndata.AnnData,
+    ls_vals: Sequence[float],
+    sigmas: Sequence[float],
+    layer: str,
+    embeddings: Sequence[str] = ("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
+    name_dict: Optional[dict] = None,
+    loo_residuals: bool = True,
+    groups: Optional[str] = None,
+    test_frac: float = 0.2,
+    random_state: int = 0,
+) -> None:
     """Test combinations of length scale and sigma hyperparameters for GP imputation.
 
     Fits a mellon FunctionEstimator for each combination of ls, sigma, and embedding,
@@ -112,8 +123,11 @@ def try_models(
             split[test_idx]  = "test"
 
         ad.obs["tr_tst"] = split
-        print(f"Train/test split: {(ad.obs['tr_tst'] == 'train').sum()} train, "
-              f"{(ad.obs['tr_tst'] == 'test').sum()} test cells.")
+        logger.info(
+            "Train/test split: %d train, %d test cells.",
+            (ad.obs["tr_tst"] == "train").sum(),
+            (ad.obs["tr_tst"] == "test").sum(),
+        )
 
     # ── Resolve name dict ─────────────────────────────────────────────────────
 
@@ -205,7 +219,7 @@ def try_models(
                 
 
 
-def read_test_results(ad, layer):
+def read_test_results(ad: anndata.AnnData, layer: str) -> pd.DataFrame:
     """Parse results from try_models into a tidy DataFrame.
 
     Parameters
@@ -251,13 +265,15 @@ def read_test_results(ad, layer):
         .reset_index()
     )
 
-    print("Best hyperparameters per embedding (lowest error_var_ratio):")
+    logger.info("Best hyperparameters per embedding (lowest mean test error/variance ratio):")
     for embedding in best["embedding"].unique():
         emb_best = best[best["embedding"] == embedding].sort_values("error_var_ratio", ascending=True).iloc[0]
-        print("Best hyperparameters per embedding (lowest mean test error/variance ratio):")
-        print(
-            f"  {embedding}: ls={emb_best['ls']}, sigma={emb_best['sigma']} "
-            f"(mean test var explained={emb_best['error_var_ratio']:.4f})"
+        logger.info(
+            "  %s: ls=%s, sigma=%s (mean test var explained=%.4f)",
+            embedding,
+            emb_best["ls"],
+            emb_best["sigma"],
+            emb_best["error_var_ratio"],
         )
 
     return res
@@ -267,7 +283,13 @@ def read_test_results(ad, layer):
 
 
 
-def plot_model_heatmap(res, embedding, tr_tst="test", ax=None, figsize=(8, 6)):
+def plot_model_heatmap(
+    res: pd.DataFrame,
+    embedding: str,
+    tr_tst: str = "test",
+    ax: Optional[Axes] = None,
+    figsize: tuple = (8, 6),
+) -> Axes:
     """Plot a heatmap of mean variance explained across ls and sigma values for a given embedding.
 
     Parameters

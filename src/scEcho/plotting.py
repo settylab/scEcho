@@ -1,39 +1,55 @@
-import seaborn as sns
-import plotly.express as px
+from __future__ import annotations
+
+import warnings
+from typing import Optional, Sequence, Union
+
+import anndata
 import matplotlib.pyplot as plt
-from adjustText import adjust_text
-from matplotlib.collections import LineCollection
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
+import plotly.express as px
 import scanpy as sc
 import scipy.sparse as sparse
-import warnings
+import seaborn as sns
+from adjustText import adjust_text
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
+from matplotlib.figure import Figure
+from pandas.api.types import is_numeric_dtype
+
+__all__ = [
+    "plot_scores",
+    "plot_direction_fractions",
+    "plot_SE",
+    "linked_plot",
+    "plot_desynchronized_state_volcano",
+    "rotate_coords",
+]
 
 
 
 def plot_scores(
-    ad,
-    obs_col,
-    c,
-    layer,
-    modality1="RNA",
-    modality2="ATAC",
-    ncells_cutoff=20,
-    ncells_layer=None,
-    interactive=False,
-    s=5,
-    features_label=None,
-    features_highlight=None,
-    n_features_label=10,
-    highlight_s_scaling=5,
-    expand=(2.0, 2.0),
-    force_text=(1.5, 1.5),
-    force_points=(0.5, 0.5),
-    max_move_frac=0.1,
-    iter_lim=1000,
+    ad: anndata.AnnData,
+    obs_col: str,
+    c: str,
+    layer: str,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    ncells_cutoff: int = 20,
+    ncells_layer: Optional[str] = None,
+    interactive: bool = False,
+    s: float = 5,
+    features_label: Optional[Union[str, Sequence[str]]] = None,
+    features_highlight: Optional[Union[str, Sequence[str]]] = None,
+    n_features_label: Optional[int] = 10,
+    highlight_s_scaling: float = 5,
+    expand: tuple = (2.0, 2.0),
+    force_text: tuple = (1.5, 1.5),
+    force_points: tuple = (0.5, 0.5),
+    max_move_frac: float = 0.1,
+    iter_lim: int = 1000,
     **adjust_text_kwargs,
-):
+) -> Optional[Axes]:
     # ── Resolve column names ───────────────────────────────────────────────────
 
     if ncells_layer is None:
@@ -211,13 +227,13 @@ def plot_scores(
     
 
 def plot_direction_fractions(
-    ad,
-    obs_col,
-    modality1_name="RNA",
-    modality2_name="ATAC",
-    figsize=None,
-    ax=None,
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    modality1_name: str = "RNA",
+    modality2_name: str = "ATAC",
+    figsize: Optional[tuple] = None,
+    ax: Optional[Axes] = None,
+) -> Axes:
     
     direction_col   = f"direction_{modality1_name}_v_{modality2_name}"
     colors_key      = f"{direction_col}_colors"
@@ -278,15 +294,17 @@ def plot_direction_fractions(
     
 
             
-def plot_SE(ad,
-            gn,
-            prc_clip = 100,
-            b = "umap",
-            prc_clip_FC = 95,
-            so = False,
-            pre_imputed_layer = "logcounts",
-            emb1 = "DM_EigenVectors_RNA",
-            emb2 = "DM_EigenVectors_ATAC"):
+def plot_SE(
+    ad: anndata.AnnData,
+    gn: str,
+    prc_clip: float = 100,
+    b: str = "umap",
+    prc_clip_FC: float = 95,
+    so: bool = False,
+    pre_imputed_layer: str = "logcounts",
+    emb1: str = "DM_EigenVectors_RNA",
+    emb2: str = "DM_EigenVectors_ATAC",
+) -> None:
     
     
     
@@ -392,12 +410,12 @@ def plot_SE(ad,
 
 
 def rotate_coords(
-    coords,
-    degrees,
-    rotate_around=np.zeros(2),
-    flip_x=False,
-    flip_y=False,
-):
+    coords: np.ndarray,
+    degrees: float,
+    rotate_around: np.ndarray = np.zeros(2),
+    flip_x: bool = False,
+    flip_y: bool = False,
+) -> np.ndarray:
     """Rotate (and optionally flip) 2D coordinates.
 
     Parameters
@@ -568,28 +586,28 @@ def make_points_df(
 
 
 def linked_plot(
-    obj1,
-    embedding1,
-    embedding2,
-    modality1_name=None,
-    modality2_name=None,
-    color_by=None,
-    layer=None,
-    vmin=None,
-    vmax=None,
-    offset=None,
-    figsize=(8, 12),
-    pt_size=10,
-    border_thickness=0,
-    pt_size_highlight=None,
-    highlight_border=True,
-    palette=None,
-    title=None,
-    line_thickness=1,
-    line_alpha=0.5,
-    line_mask=None,
-    downsample_lines_frac=0.3,
-):
+    obj1: anndata.AnnData,
+    embedding1: str,
+    embedding2: str,
+    modality1_name: Optional[str] = None,
+    modality2_name: Optional[str] = None,
+    color_by: Optional[str] = None,
+    layer: Optional[str] = None,
+    vmin: Optional[Union[float, str]] = None,
+    vmax: Optional[Union[float, str]] = None,
+    offset: Optional[tuple] = None,
+    figsize: tuple = (8, 12),
+    pt_size: float = 10,
+    border_thickness: float = 0,
+    pt_size_highlight: Optional[float] = None,
+    highlight_border: bool = True,
+    palette: Optional[Union[str, dict]] = None,
+    title: Optional[str] = None,
+    line_thickness: float = 1,
+    line_alpha: float = 0.5,
+    line_mask: Optional[list] = None,
+    downsample_lines_frac: float = 0.3,
+) -> Figure:
     """Plot two embeddings side by side with connecting lines between paired cells.
 
     Parameters
@@ -832,18 +850,18 @@ def linked_plot(
 
 
 def plot_desynchronized_state_volcano(
-    ad,
-    hue_col,
-    modality1_name="RNA",
-    modality2_name="ATAC",
-    lfc_threshold=0.7,
-    pval_threshold=0.05,
-    palette=None,
-    sig_size=50,
-    bg_color="lightgrey",
-    figsize=None,
-    ax=None,
-):
+    ad: anndata.AnnData,
+    hue_col: str,
+    modality1_name: str = "RNA",
+    modality2_name: str = "ATAC",
+    lfc_threshold: float = 0.7,
+    pval_threshold: float = 0.05,
+    palette: Optional[Union[str, dict]] = None,
+    sig_size: float = 50,
+    bg_color: str = "lightgrey",
+    figsize: Optional[tuple] = None,
+    ax: Optional[Axes] = None,
+) -> Axes:
     """Volcano-style plot of density-comparison results.
 
     Plots the density log-fold change between two modalities against its
