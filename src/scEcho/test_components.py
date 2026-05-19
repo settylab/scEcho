@@ -46,20 +46,24 @@ def sweep_diffusion_components(
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert obsm_key in ad.obsm, (
-        f"'{obsm_key}' not found in ad.obsm. Available: {list(ad.obsm.keys())}"
-    )
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. Available: {list(ad.layers.keys())}"
-    )
+    if obsm_key not in ad.obsm:
+        raise KeyError(
+            f"'{obsm_key}' not found in ad.obsm. Available: {list(ad.obsm.keys())}"
+        )
+    if layer not in ad.layers:
+        raise KeyError(
+            f"Layer '{layer}' not found in ad.layers. Available: {list(ad.layers.keys())}"
+        )
 
     n_components = ad.obsm[obsm_key].shape[1]
 
-    assert min_components >= 2, "min_components must be at least 2."
-    assert min_components <= n_components, (
-        f"min_components ({min_components}) exceeds the number of available "
-        f"components ({n_components}) in '{obsm_key}'."
-    )
+    if min_components < 2:
+        raise ValueError("min_components must be at least 2.")
+    if min_components > n_components:
+        raise ValueError(
+            f"min_components ({min_components}) exceeds the number of available "
+            f"components ({n_components}) in '{obsm_key}'."
+        )
 
     # ── Temporarily store full embedding ──────────────────────────────────────
 
@@ -132,10 +136,11 @@ def collect_sweep_residual_means(
     for n in tqdm(range(min_components, n_components + 1), desc="Collecting residual means"):
         residuals_key = f"predicted_{layer}_{obsm_key}_{n}dims_space_residuals"
 
-        assert residuals_key in ad.layers, (
-            f"'{residuals_key}' not found in ad.layers. "
-            f"Run sweep_diffusion_components first."
-        )
+        if residuals_key not in ad.layers:
+            raise KeyError(
+                f"'{residuals_key}' not found in ad.layers. "
+                f"Run sweep_diffusion_components first."
+            )
 
         vals = ad.layers[residuals_key]
         if sparse.issparse(vals):
