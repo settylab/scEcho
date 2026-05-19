@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import Optional
+from typing import Optional, Sequence
 
 import anndata
 import kompot
@@ -32,6 +32,7 @@ def dn_comp_obsm(
     sample_grouping_col: Optional[str] = None,
     sv_min_cells: int = 200,
     sqrt_eps: float = 1e-16,
+    direction_colors: Sequence[str] = ("#ff7f0e", "#1f77b4", "lightgrey"),
 ) -> None:
     """Compare density between two embeddings in separate spaces.
 
@@ -73,6 +74,11 @@ def dn_comp_obsm(
         zero on tested pipelines (min observed: 0.0225), so the default has
         negligible numerical effect — exposed for users who want to disable
         the floor (``sqrt_eps=0``) or raise it.
+    direction_colors : sequence of str, optional
+        Three colors written to ``ad.uns[f"{direction_key}_colors"]``, in the
+        order ``(modality2-higher, modality1-higher, neutral)`` to match the
+        ordered ``CategoricalDtype`` of the direction column. Defaults to
+        ``("#ff7f0e", "#1f77b4", "lightgrey")``.
 
     Returns
     -------
@@ -220,4 +226,4 @@ def dn_comp_obsm(
         ordered=True,
     )
     ad.obs[direction_key] = ad.obs[direction_key].astype(cat_type)
-    ad.uns[f"{direction_key}_colors"] = ["#ff7f0e", "#1f77b4", "lightgrey"]
+    ad.uns[f"{direction_key}_colors"] = list(direction_colors)

@@ -489,6 +489,7 @@ def run_null_desynch_test(
     eps: float = 1e-16,
     save_predictions: bool = True,
     save_covariance: bool = True,
+    direction_colors: Sequence[str] = ("#ff7f0e", "#1f77b4", "lightgrey"),
 ) -> None:
     """Run a null model test for desynchronization statistics.
 
@@ -513,6 +514,13 @@ def run_null_desynch_test(
         Two-sided p-value threshold for significance.
     random_state : int
         Random seed for null layer shuffling.
+    direction_colors : sequence of str, optional
+        Three colors written to
+        ``ad.uns[f"desynch_direction_{layer}_{modality1}_v_{modality2}_colors"]``,
+        in the order ``({modality2}-structure, {modality1}-structure,
+        not-significant)`` to match the ordered ``CategoricalDtype`` of the
+        per-feature direction column. Defaults to
+        ``("#ff7f0e", "#1f77b4", "lightgrey")``.
 
     Returns
     -------
@@ -720,9 +728,7 @@ def run_null_desynch_test(
 
     # ── Store direction colors in uns ─────────────────────────────────────────
 
-    ad.uns[f"desynch_direction_{layer}_{modality1}_v_{modality2}_colors"] = [
-        "#ff7f0e", "#1f77b4", "lightgrey"
-    ]
+    ad.uns[f"desynch_direction_{layer}_{modality1}_v_{modality2}_colors"] = list(direction_colors)
 
 
 

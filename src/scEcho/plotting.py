@@ -27,6 +27,14 @@ __all__ = [
 ]
 
 
+# Defaults forwarded to ``adjustText.adjust_text`` from ``plot_scores``. Lifted
+# out of the call site so callers can override any key (e.g. arrowprops style,
+# additional repulsion knobs) via the ``**adjust_text_kwargs`` catch-all on
+# ``plot_scores`` — keys passed by the caller override these defaults.
+_DEFAULT_ADJUST_TEXT_KWARGS = {
+    "arrowprops": {"arrowstyle": "-", "color": "black", "lw": 0.5},
+}
+
 
 def plot_scores(
     ad: anndata.AnnData,
@@ -213,13 +221,12 @@ def plot_scores(
                 x=plot_df[var_exp_col].values,
                 y=plot_df[MHD_col].values,
                 ax=ax,
-                arrowprops=dict(arrowstyle="-", color="black", lw=0.5),
                 expand=expand,
                 force_text=force_text,
                 force_points=force_points,
                 max_move=max_move,
                 iter_lim=iter_lim,
-                **adjust_text_kwargs,
+                **{**_DEFAULT_ADJUST_TEXT_KWARGS, **adjust_text_kwargs},
             )
 
         return ax
