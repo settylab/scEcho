@@ -1,5 +1,5 @@
-"""Tests for `scEcho.Echo_features` — covers the six entries in
-`Echo_features.__all__` plus the un-exposed `compute_ncells` helper.
+"""Tests for `scEcho.echo_features` — covers the six entries in
+`echo_features.__all__` plus the un-exposed `compute_ncells` helper.
 
 Smoke tests assert function-exit and expected output keys; correctness
 tests assert hardcoded baseline values captured on the first green run
@@ -10,13 +10,13 @@ import numpy.testing as npt
 import pytest
 
 import scEcho
-from scEcho.Echo_features import compute_ncells
+from scEcho.echo_features import compute_ncells
 
 
 # ── embeddings_predict_layer ─────────────────────────────────────────────────
 
 def test_smoke_embeddings_predict_layer(synthetic_adata):
-    scEcho.Echo_features.embeddings_predict_layer(
+    scEcho.echo_features.embeddings_predict_layer(
         synthetic_adata, ls=1.0, sigma=0.1, layer="L",
     )
     assert "predicted_L_DM_EigenVectors_RNA_space" in synthetic_adata.layers
@@ -26,7 +26,7 @@ def test_smoke_embeddings_predict_layer(synthetic_adata):
 
 
 def test_correctness_embeddings_predict_layer_values(synthetic_adata):
-    scEcho.Echo_features.embeddings_predict_layer(
+    scEcho.echo_features.embeddings_predict_layer(
         synthetic_adata, ls=1.0, sigma=0.1, layer="L",
     )
     pred = np.asarray(synthetic_adata.layers["predicted_L_DM_EigenVectors_RNA_space"])
@@ -47,10 +47,10 @@ def test_correctness_embeddings_predict_layer_values(synthetic_adata):
 # ── get_desynch_stats ────────────────────────────────────────────────────────
 
 def test_smoke_get_desynch_stats(synthetic_adata):
-    scEcho.Echo_features.embeddings_predict_layer(
+    scEcho.echo_features.embeddings_predict_layer(
         synthetic_adata, ls=1.0, sigma=0.1, layer="L",
     )
-    scEcho.Echo_features.get_desynch_stats(
+    scEcho.echo_features.get_desynch_stats(
         synthetic_adata, obs_col="combo_type", layer="L",
     )
     res = synthetic_adata.varm["reconstruction_results_L"]
@@ -62,10 +62,10 @@ def test_smoke_get_desynch_stats(synthetic_adata):
 
 
 def test_correctness_get_desynch_stats_mse_values(synthetic_adata):
-    scEcho.Echo_features.embeddings_predict_layer(
+    scEcho.echo_features.embeddings_predict_layer(
         synthetic_adata, ls=1.0, sigma=0.1, layer="L",
     )
-    scEcho.Echo_features.get_desynch_stats(
+    scEcho.echo_features.get_desynch_stats(
         synthetic_adata, obs_col="combo_type", layer="L",
     )
     res = synthetic_adata.varm["reconstruction_results_L"]
@@ -92,7 +92,7 @@ def test_correctness_get_desynch_stats_mse_values(synthetic_adata):
 # ── make_null_layer ──────────────────────────────────────────────────────────
 
 def test_smoke_make_null_layer(synthetic_adata):
-    scEcho.Echo_features.make_null_layer(synthetic_adata, layer="L", random_state=0)
+    scEcho.echo_features.make_null_layer(synthetic_adata, layer="L", random_state=0)
     assert "L_null" in synthetic_adata.layers
     assert synthetic_adata.layers["L_null"].shape == synthetic_adata.layers["L"].shape
 
@@ -103,7 +103,7 @@ def test_correctness_make_null_layer_preserves_per_feature_distribution(syntheti
     make_null_layer (breaks cell-cell correlations, keeps marginals).
     """
     original = synthetic_adata.layers["L"].copy()
-    scEcho.Echo_features.make_null_layer(synthetic_adata, layer="L", random_state=0)
+    scEcho.echo_features.make_null_layer(synthetic_adata, layer="L", random_state=0)
     null = np.asarray(synthetic_adata.layers["L_null"])
 
     # the function uses one shuffle index applied to all features (audit #25)
@@ -118,13 +118,13 @@ def test_correctness_make_null_layer_preserves_per_feature_distribution(syntheti
 # ── run_null_desynch_test ────────────────────────────────────────────────────
 
 def test_smoke_run_null_desynch_test(synthetic_adata):
-    scEcho.Echo_features.embeddings_predict_layer(
+    scEcho.echo_features.embeddings_predict_layer(
         synthetic_adata, ls=1.0, sigma=0.1, layer="L",
     )
-    scEcho.Echo_features.get_desynch_stats(
+    scEcho.echo_features.get_desynch_stats(
         synthetic_adata, obs_col="combo_type", layer="L",
     )
-    scEcho.Echo_features.run_null_desynch_test(
+    scEcho.echo_features.run_null_desynch_test(
         synthetic_adata, obs_col="combo_type", layer="L",
         ls=1.0, sigma=0.1, min_cells=10,
     )
@@ -139,13 +139,13 @@ def test_smoke_run_null_desynch_test(synthetic_adata):
 
 
 def test_correctness_run_null_desynch_test_values(synthetic_adata):
-    scEcho.Echo_features.embeddings_predict_layer(
+    scEcho.echo_features.embeddings_predict_layer(
         synthetic_adata, ls=1.0, sigma=0.1, layer="L",
     )
-    scEcho.Echo_features.get_desynch_stats(
+    scEcho.echo_features.get_desynch_stats(
         synthetic_adata, obs_col="combo_type", layer="L",
     )
-    scEcho.Echo_features.run_null_desynch_test(
+    scEcho.echo_features.run_null_desynch_test(
         synthetic_adata, obs_col="combo_type", layer="L",
         ls=1.0, sigma=0.1, min_cells=10,
     )
@@ -176,7 +176,7 @@ def test_correctness_run_null_desynch_test_values(synthetic_adata):
 # ── run_echo_features (orchestrator) ─────────────────────────────────────────
 
 def test_smoke_run_echo_features(synthetic_adata):
-    scEcho.Echo_features.run_echo_features(
+    scEcho.echo_features.run_echo_features(
         synthetic_adata, obs_col="combo_type", layers=["L"],
         sigma=0.1, ls=1.0, min_cells=10, verbose=False,
     )
@@ -198,14 +198,14 @@ def test_correctness_run_echo_features_matches_pipeline_components(synthetic_ada
     the three component functions individually with the same parameters.
     """
     a2 = synthetic_adata.copy()
-    scEcho.Echo_features.run_echo_features(
+    scEcho.echo_features.run_echo_features(
         synthetic_adata, obs_col="combo_type", layers=["L"],
         sigma=0.1, ls=1.0, min_cells=10, verbose=False,
     )
 
-    scEcho.Echo_features.embeddings_predict_layer(a2, ls=1.0, sigma=0.1, layer="L")
-    scEcho.Echo_features.get_desynch_stats(a2, obs_col="combo_type", layer="L")
-    scEcho.Echo_features.run_null_desynch_test(
+    scEcho.echo_features.embeddings_predict_layer(a2, ls=1.0, sigma=0.1, layer="L")
+    scEcho.echo_features.get_desynch_stats(a2, obs_col="combo_type", layer="L")
+    scEcho.echo_features.run_null_desynch_test(
         a2, obs_col="combo_type", layer="L",
         ls=1.0, sigma=0.1, min_cells=10,
     )
@@ -222,11 +222,11 @@ def test_correctness_run_echo_features_matches_pipeline_components(synthetic_ada
 # ── get_reconstruction_results ───────────────────────────────────────────────
 
 def test_get_reconstruction_results_filters_to_group(synthetic_adata):
-    scEcho.Echo_features.run_echo_features(
+    scEcho.echo_features.run_echo_features(
         synthetic_adata, obs_col="combo_type", layers=["L"],
         sigma=0.1, ls=1.0, min_cells=10, verbose=False,
     )
-    sub = scEcho.Echo_features.get_reconstruction_results(
+    sub = scEcho.echo_features.get_reconstruction_results(
         synthetic_adata, layer="L", grouping="combo_type", group="A",
     )
     # all returned columns must reference group "A"
@@ -234,20 +234,20 @@ def test_get_reconstruction_results_filters_to_group(synthetic_adata):
         assert "_combo_type_A" in col, f"unexpected column for group A: {col}"
     # asking for a group that doesn't exist raises
     with pytest.raises(KeyError):
-        scEcho.Echo_features.get_reconstruction_results(
+        scEcho.echo_features.get_reconstruction_results(
             synthetic_adata, layer="L", grouping="combo_type", group="Z",
         )
 
 
 def test_get_reconstruction_results_min_cells_filter(synthetic_adata):
-    scEcho.Echo_features.run_echo_features(
+    scEcho.echo_features.run_echo_features(
         synthetic_adata, obs_col="combo_type", layers=["L"],
         sigma=0.1, ls=1.0, min_cells=10, verbose=False,
     )
-    full = scEcho.Echo_features.get_reconstruction_results(
+    full = scEcho.echo_features.get_reconstruction_results(
         synthetic_adata, layer="L", grouping="combo_type", group="A",
     )
-    filtered = scEcho.Echo_features.get_reconstruction_results(
+    filtered = scEcho.echo_features.get_reconstruction_results(
         synthetic_adata, layer="L", grouping="combo_type", group="A",
         min_cells=10**6,  # absurd cutoff
     )

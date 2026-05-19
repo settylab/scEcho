@@ -58,7 +58,7 @@ Imported as `import scEcho`:
 
 - `echo_states` — per-modality density estimation and cross-modality density
   comparison; writes per-cell direction labels into `.obs`.
-- `Echo_features` — feature-level desynchronization pipeline (imputation,
+- `echo_features` — feature-level desynchronization pipeline (imputation,
   per-feature statistics, null-model significance testing).
 - `plotting` — visualization (volcano plots, linked side-by-side embeddings,
   per-group direction fractions).
@@ -69,7 +69,7 @@ Imported as `import scEcho`:
 
 See [`notebooks/example.ipynb`](notebooks/example.ipynb) for the canonical end-to-end pipeline. The basic
 shape is `scEcho.echo_states.dn_comp_obsm(adata, ...)` followed by
-`scEcho.Echo_features.run_echo_features(adata, ...)`; see each function's
+`scEcho.echo_features.run_echo_features(adata, ...)`; see each function's
 docstring for the required `.obsm` / `.obs` / `.layers` keys.
 
 ## License

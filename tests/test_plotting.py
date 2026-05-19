@@ -14,9 +14,9 @@ import scEcho
 
 @pytest.fixture
 def adata_with_desynch_features(synthetic_adata):
-    """Fixture whose AnnData has already been through the full Echo_features
+    """Fixture whose AnnData has already been through the full echo_features
     pipeline so plotting functions can read their expected obs/varm keys."""
-    scEcho.Echo_features.run_echo_features(
+    scEcho.echo_features.run_echo_features(
         synthetic_adata, obs_col="combo_type", layers=["L"],
         sigma=0.1, ls=1.0, min_cells=10, verbose=False,
     )

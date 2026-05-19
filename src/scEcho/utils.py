@@ -20,7 +20,7 @@ from scipy.sparse import csr_matrix
 from scipy.stats import spearmanr
 from tqdm.auto import tqdm
 
-from .Echo_features import embeddings_predict_layer
+from .echo_features import embeddings_predict_layer
 
 __all__ = [
     # existing utils
