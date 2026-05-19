@@ -628,9 +628,13 @@ def run_null_desynch_test(
 
         null_var = null_vals.var(axis=0)
 
-        # null var explained diff — column name includes group identifier
+        # null var explained diff — column name includes group identifier.
+        # Zero-variance features yield inf / NaN here; that is expected and they
+        # are excluded by ``expressed_mask`` below, so silence the divide
+        # warnings rather than surface noise the algorithm already handles.
         null_col = f"var_explained_diff_{layer}_null_{obs_col}_{c}"
-        res[null_col] = mse_null_diff / null_var
+        with np.errstate(divide="ignore", invalid="ignore"):
+            res[null_col] = mse_null_diff / null_var
 
         # ── Null distribution summary statistics ──────────────────────────────
 
