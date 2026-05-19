@@ -41,7 +41,9 @@ def embeddings_predict_layer(
     layer=None,
     gp_type=None,
     # loo_residuals = True,
-    save_obs_variance=True
+    save_obs_variance=True,
+    save_predictions=True,
+    save_covariance=True,
 ):
     """Impute a layer in ad.layers over a given space (or spaces) using a Gaussian process.
 
@@ -52,7 +54,10 @@ def embeddings_predict_layer(
     ls : float, optional
         Length scale of the estimator.
     ls_factor : float
-        Length scale factor.
+        Length scale factor. ``ls_factor=10`` (Mellon default is ``1``) is
+        used because GP imputation of single-cell features on diffusion
+        embeddings benefits from a substantially longer length scale to
+        smooth across sparse measurements.
     sigma : float
         Prior on the standard deviation of the features in the layer.
     embeddings : str, tuple, or list
@@ -61,12 +66,22 @@ def embeddings_predict_layer(
         Key in ad.layers containing the values to impute. Pass None to use ad.X.
     gp_type : optional
         Gaussian process type passed to mellon.FunctionEstimator.
+    save_predictions : bool, default True
+        If False, skip writing the per-modality prediction to
+        ``ad.layers[f"predicted_{layer}_{m}_space"]``. Disable to avoid an
+        ``(n_cells, n_features)`` write per modality when downstream code
+        does not need the imputed layer.
+    save_covariance : bool, default True
+        If False, skip writing the per-modality posterior covariance to
+        ``ad.obsp[f"predicted_{layer}_{m}_space_uncertainty"]``. Disable to
+        avoid an ``(n_cells, n_cells)`` write per modality per layer
+        (~800 MB per entry at 10k cells, scaling quadratically).
 
     Returns
     -------
     Updates ad in place with the following keys per modality:
-        ad.layers[f"predicted_{layer_name}_{m}_space"]           : Imputed layer values.
-        ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] : Full covariance matrix.
+        ad.layers[f"predicted_{layer_name}_{m}_space"]           : Imputed layer values (if save_predictions).
+        ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] : Full covariance matrix (if save_covariance).
         ad.layers[f"predicted_{layer_name}_{m}_space_residuals"] : LOO squared residuals.
     """
 
@@ -113,12 +128,14 @@ def embeddings_predict_layer(
 
         fest.fit(ad.obsm[m], data)
 
-        ad.layers[f"predicted_{layer_name}_{m}_space"] = np.asarray(
-            fest.predict(ad.obsm[m])
-        )
-        ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] = np.asarray(
-            fest.predict.covariance(ad.obsm[m], diag=False)
-        )
+        if save_predictions:
+            ad.layers[f"predicted_{layer_name}_{m}_space"] = np.asarray(
+                fest.predict(ad.obsm[m])
+            )
+        if save_covariance:
+            ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] = np.asarray(
+                fest.predict.covariance(ad.obsm[m], diag=False)
+            )
         
         
         
@@ -273,17 +290,28 @@ def get_desynch_stats(
         
         # Model uncertainty
 
-        unc1 = ad[ind].obsp[f"predicted_{layer}_{embedding1}_space_uncertainty"]
-        unc2 = ad[ind].obsp[f"predicted_{layer}_{embedding2}_space_uncertainty"]
+        unc_key1 = f"predicted_{layer}_{embedding1}_space_uncertainty"
+        unc_key2 = f"predicted_{layer}_{embedding2}_space_uncertainty"
 
-        
-        
-        # ── Mahalanobis distance ───────────────────────────────────────────────
-        res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
-            diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-            covariance=unc1 + unc2 + 1e-16,
-            diagonal_variance=diagonal_variance,
-        )
+        if (unc_key1 in ad.obsp) and (unc_key2 in ad.obsp):
+            unc1 = ad[ind].obsp[unc_key1]
+            unc2 = ad[ind].obsp[unc_key2]
+
+            # ── Mahalanobis distance ───────────────────────────────────────────
+            res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
+                diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
+                covariance=unc1 + unc2 + 1e-16,
+                diagonal_variance=diagonal_variance,
+            )
+        else:
+            missing_unc = [k for k in [unc_key1, unc_key2] if k not in ad.obsp]
+            warnings.warn(
+                f"Posterior covariance keys not found in ad.obsp — Mahalanobis "
+                f"distance skipped for group '{c}'. To enable, rerun "
+                f"embeddings_predict_layer with save_covariance=True.\n"
+                f"\tMissing: {missing_unc}"
+            )
+            res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = np.nan
         
         
 
@@ -407,7 +435,9 @@ def run_null_desynch_test(
     p_val_threshold=0.05,
     random_state=0,
     min_cells=50,
-    eps=1e-16
+    eps=1e-16,
+    save_predictions=True,
+    save_covariance=True,
 ):
     """Run a null model test for desynchronization statistics.
 
@@ -497,7 +527,9 @@ def run_null_desynch_test(
             layer=null_layer,
             ls=ls,
             ls_factor=ls_factor,
-            sigma=sigma
+            sigma=sigma,
+            save_predictions=save_predictions,
+            save_covariance=save_covariance,
         )
 
     # ── Compute null var_explained_diff per group ─────────────────────────────
@@ -622,17 +654,28 @@ def run_null_desynch_test(
         
         # Model uncertainty
 
-        unc1 = ad[ind].obsp[f"predicted_{null_layer}_{embedding1}_space_uncertainty"]
-        unc2 = ad[ind].obsp[f"predicted_{null_layer}_{embedding2}_space_uncertainty"]
+        unc_key1 = f"predicted_{null_layer}_{embedding1}_space_uncertainty"
+        unc_key2 = f"predicted_{null_layer}_{embedding2}_space_uncertainty"
 
-        
-        diff = ad[ind].layers[f"predicted_{null_layer}_{embedding1}_space_residuals"] - ad[ind].layers[f"predicted_{null_layer}_{embedding2}_space_residuals"]
-        # ── Mahalanobis distance ───────────────────────────────────────────────
-        res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
-            diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-            covariance=unc1 + unc2 + 1e-16,
-            diagonal_variance=diagonal_variance,
-        )
+        if (unc_key1 in ad.obsp) and (unc_key2 in ad.obsp):
+            unc1 = ad[ind].obsp[unc_key1]
+            unc2 = ad[ind].obsp[unc_key2]
+
+            # ── Mahalanobis distance ───────────────────────────────────────────
+            res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
+                diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
+                covariance=unc1 + unc2 + 1e-16,
+                diagonal_variance=diagonal_variance,
+            )
+        else:
+            missing_unc = [k for k in [unc_key1, unc_key2] if k not in ad.obsp]
+            warnings.warn(
+                f"Posterior covariance keys not found in ad.obsp — null "
+                f"Mahalanobis distance skipped for group '{c}'. To enable, "
+                f"rerun embeddings_predict_layer with save_covariance=True.\n"
+                f"\tMissing: {missing_unc}"
+            )
+            res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = np.nan
         
         
 
@@ -664,6 +707,8 @@ def run_echo_features(
     min_cells=50,
     eps=1e-16,
     verbose=True,
+    save_predictions=True,
+    save_covariance=True,
 ):
     """Run the full desynchronization pipeline across one or more layers.
 
@@ -672,7 +717,7 @@ def run_echo_features(
       2. get_desynch_stats         -- compute per-feature desynch statistics
       3. run_null_desynch_test     -- test significance against a null model
 
-    
+
 
     Parameters
     ----------
@@ -691,7 +736,10 @@ def run_echo_features(
     ls : float or None
         Length scale used for the GP fit. None lets the estimator choose.
     ls_factor : float
-        Length scale factor.
+        Length scale factor. ``ls_factor=10`` (Mellon default is ``1``) is
+        used because GP imputation of single-cell features on diffusion
+        embeddings benefits from a substantially longer length scale to
+        smooth across sparse measurements.
     p_val_threshold : float
         Two-sided p-value threshold for the null test.
     random_state : int
@@ -702,6 +750,18 @@ def run_echo_features(
         Small constant for numerical stability.
     verbose : bool
         Print progress per layer.
+    save_predictions : bool, default True
+        Forwarded to :func:`embeddings_predict_layer`. If False, skip
+        writing the imputed layer to ``ad.layers`` to avoid an
+        ``(n_cells, n_features)`` write per modality.
+    save_covariance : bool, default True
+        Forwarded to :func:`embeddings_predict_layer`. If False, skip
+        writing the posterior covariance to ``ad.obsp`` to avoid an
+        ``(n_cells, n_cells)`` write per modality per layer
+        (~800 MB per entry at 10k cells, scaling quadratically). Note that
+        downstream Mahalanobis-distance steps in :func:`get_desynch_stats`
+        and :func:`run_null_desynch_test` require the covariance entries —
+        disabling this kwarg precludes running the full pipeline.
 
     Returns
     -------
@@ -736,6 +796,8 @@ def run_echo_features(
             ls=ls,
             ls_factor=ls_factor,
             layer=layer,
+            save_predictions=save_predictions,
+            save_covariance=save_covariance,
         )
 
         # 2. Per-feature desynchronization statistics.
@@ -770,6 +832,8 @@ def run_echo_features(
             random_state=random_state,
             min_cells=min_cells,
             eps=eps,
+            save_predictions=save_predictions,
+            save_covariance=save_covariance,
         )
 
         if verbose:
