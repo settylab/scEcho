@@ -301,13 +301,11 @@ def get_desynch_stats(
             
             
             
-        # mean feature values for base layer 
+        # mean feature values for base layer
         res[f"mean_val_{obs_col}_{c}"] = ad[ind].layers[layer].mean(axis=0).T
 
-        if sparse.issparse(ad[ind].layers[layer]):
-            layer_vals = ad[ind].layers[layer].toarray()
-        else:
-            layer_vals = ad[ind].layers[layer]
+        # reuse the dense layer materialized once above the loop
+        layer_vals = arr[ind.values]
 
         res[f"{layer}_var_{obs_col}_{c}"] = layer_vals.var(axis=0)
         
@@ -504,6 +502,11 @@ def run_null_desynch_test(
 
     res = ad.varm[varm_key]
 
+    # materialize null layer once before the per-group loop
+    null_arr = ad.layers[null_layer]
+    if sparse.issparse(null_arr):
+        null_arr = null_arr.toarray()
+
     for c in (pbar := tqdm(groups)):
         pbar.set_description(f"Computing null distribution: {obs_col}: {c}")
 
@@ -524,11 +527,8 @@ def run_null_desynch_test(
         # save raw null MSE difference — column name includes group identifier
         res[f"MSE_null_diff_{obs_col}_{c}"] = mse_null_diff
 
-        # null layer variance in group
-        if sparse.issparse(ad[ind].layers[null_layer]):
-            null_vals = ad[ind].layers[null_layer].toarray()
-        else:
-            null_vals = ad[ind].layers[null_layer]
+        # null layer variance in group — slice the dense matrix hoisted above
+        null_vals = null_arr[ind.values]
 
         null_var = null_vals.var(axis=0)
 
