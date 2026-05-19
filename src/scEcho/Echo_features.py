@@ -155,7 +155,7 @@ def get_desynch_stats(
     modality2="ATAC",
     embedding1="DM_EigenVectors_RNA",
     embedding2="DM_EigenVectors_ATAC",
-    extra_ncells_layers=[],
+    extra_ncells_layers=None,
     eps=1e-16,
 ):
     """Compute per-feature desynchronization statistics between two modalities, grouped by a cell annotation.
@@ -199,6 +199,9 @@ def get_desynch_stats(
         {layer}_var_{c}                        : Variance of layer values in group.
         var_explained_diff_{layer}_{c}         : MSE difference normalized by layer variance.
     """
+
+    if extra_ncells_layers is None:
+        extra_ncells_layers = []
 
     # ── Compute total variance across the layer ────────────────────────────────
 

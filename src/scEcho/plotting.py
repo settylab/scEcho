@@ -586,7 +586,7 @@ def linked_plot(
     title=None,
     line_thickness=1,
     line_alpha=0.5,
-    line_mask=[],
+    line_mask=None,
     downsample_lines_frac=0.3,
 ):
     """Plot two embeddings side by side with connecting lines between paired cells.
@@ -646,6 +646,8 @@ def linked_plot(
         modality2_name = embedding2
     if color_by is None:
         color_by = "modality"
+    if line_mask is None:
+        line_mask = []
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 

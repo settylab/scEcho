@@ -15,7 +15,7 @@ def try_models(
     sigmas,
     layer,
     embeddings=("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
-    name_dict={"DM_EigenVectors_RNA":"RNA", "DM_EigenVectors_ATAC":"ATAC"},
+    name_dict=None,
     loo_residuals=True,
     groups=None,
     test_frac=0.2,
@@ -118,7 +118,7 @@ def try_models(
     # ── Resolve name dict ─────────────────────────────────────────────────────
 
     if name_dict is None:
-        name_dict = {}
+        name_dict = {"DM_EigenVectors_RNA": "RNA", "DM_EigenVectors_ATAC": "ATAC"}
     for e in embeddings:
         if e not in name_dict:
             name_dict[e] = e
