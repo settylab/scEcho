@@ -32,6 +32,7 @@ def plot_scores(
     force_points=(0.5, 0.5),
     max_move_frac=0.1,
     iter_lim=1000,
+    show=True,
     **adjust_text_kwargs,
 ):
     # ── Resolve column names ───────────────────────────────────────────────────
@@ -141,7 +142,8 @@ def plot_scores(
                 hover_name="feature",
             )
         fig.update_layout(autosize=False, width=1000, height=800, legend_title=None)
-        fig.show()
+        if show:
+            fig.show()
         return fig
 
     else:
