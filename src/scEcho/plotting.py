@@ -224,12 +224,14 @@ def plot_direction_fractions(
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert direction_col in ad.obs.columns, (
-        f"'{direction_col}' not found in ad.obs. Run dn_comp_obsm first."
-    )
-    assert colors_key in ad.uns, (
-        f"'{colors_key}' not found in ad.uns. Run dn_comp_obsm first."
-    )
+    if direction_col not in ad.obs.columns:
+        raise KeyError(
+            f"'{direction_col}' not found in ad.obs. Run dn_comp_obsm first."
+        )
+    if colors_key not in ad.uns:
+        raise KeyError(
+            f"'{colors_key}' not found in ad.uns. Run dn_comp_obsm first."
+        )
 
     # ── Compute fractions ─────────────────────────────────────────────────────
 
@@ -585,7 +587,7 @@ def linked_plot(
     title=None,
     line_thickness=1,
     line_alpha=0.5,
-    line_mask=[],
+    line_mask=None,
     downsample_lines_frac=0.3,
 ):
     """Plot two embeddings side by side with connecting lines between paired cells.
@@ -645,15 +647,19 @@ def linked_plot(
         modality2_name = embedding2
     if color_by is None:
         color_by = "modality"
+    if line_mask is None:
+        line_mask = []
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert embedding1 in obj1.obsm, (
-        f"'{embedding1}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
-    )
-    assert embedding2 in obj1.obsm, (
-        f"'{embedding2}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
-    )
+    if embedding1 not in obj1.obsm:
+        raise KeyError(
+            f"'{embedding1}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
+        )
+    if embedding2 not in obj1.obsm:
+        raise KeyError(
+            f"'{embedding2}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
+        )
 
     if pt_size_highlight is None:
         pt_size_highlight = pt_size
@@ -670,13 +676,15 @@ def linked_plot(
             f"cannot determine how to color. Rename one to disambiguate."
         )
     elif in_var:
-        assert layer is not None, (
-            f"'{color_by}' is in ad.var_names — a layer must be specified via the layer argument."
-        )
-        assert layer in obj1.layers, (
-            f"Layer '{layer}' not found in ad.layers. "
-            f"Available layers: {list(obj1.layers.keys())}"
-        )
+        if layer is None:
+            raise ValueError(
+                f"'{color_by}' is in ad.var_names — a layer must be specified via the layer argument."
+            )
+        if layer not in obj1.layers:
+            raise KeyError(
+                f"Layer '{layer}' not found in ad.layers. "
+                f"Available layers: {list(obj1.layers.keys())}"
+            )
         vals = obj1[:, color_by].layers[layer]
         if sparse.issparse(vals):
             vals = vals.toarray()
@@ -752,11 +760,13 @@ def linked_plot(
         if bound is None or color_vals is None:
             return bound
         if isinstance(bound, str):
-            assert bound.startswith("p"), (
-                f"String vmin/vmax must be of the form 'p{{number}}' (e.g. 'p5', 'p97.5'). Got: '{bound}'"
-            )
+            if not bound.startswith("p"):
+                raise ValueError(
+                    f"String vmin/vmax must be of the form 'p{{number}}' (e.g. 'p5', 'p97.5'). Got: '{bound}'"
+                )
             q = float(bound[1:])
-            assert 0 <= q <= 100, f"Percentile must be between 0 and 100. Got: {q}"
+            if not (0 <= q <= 100):
+                raise ValueError(f"Percentile must be between 0 and 100. Got: {q}")
             return np.nanpercentile(color_vals, q)
         return bound
 
@@ -884,9 +894,10 @@ def plot_desynchronized_state_volcano(
     # ── Validate inputs ───────────────────────────────────────────────────────
 
     for col in (direction_col, x_col, y_col, hue_col):
-        assert col in ad.obs.columns, (
-            f"'{col}' not found in ad.obs. Run the density comparison first."
-        )
+        if col not in ad.obs.columns:
+            raise KeyError(
+                f"'{col}' not found in ad.obs. Run the density comparison first."
+            )
 
     # ── Resolve palette ───────────────────────────────────────────────────────
 

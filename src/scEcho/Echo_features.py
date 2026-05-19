@@ -93,10 +93,11 @@ def embeddings_predict_layer(
         data       = ad.X
         layer_name = "X"
     else:
-        assert layer in ad.layers, (
-            f"Layer '{layer}' not found in ad.layers. "
-            f"Available layers: {list(ad.layers.keys())}"
-        )
+        if layer not in ad.layers:
+            raise KeyError(
+                f"Layer '{layer}' not found in ad.layers. "
+                f"Available layers: {list(ad.layers.keys())}"
+            )
         data       = ad.layers[layer]
         layer_name = layer
 
@@ -107,10 +108,11 @@ def embeddings_predict_layer(
         embeddings = (embeddings,)
     
     missing_embeddings = [m for m in embeddings if m not in ad.obsm]
-    assert len(missing_embeddings) == 0, (
-        f"The following embeddings are missing from ad.obsm:\n\t{missing_embeddings}\n"
-        f"Available keys: {list(ad.obsm.keys())}"
-    )
+    if len(missing_embeddings) != 0:
+        raise KeyError(
+            f"The following embeddings are missing from ad.obsm:\n\t{missing_embeddings}\n"
+            f"Available keys: {list(ad.obsm.keys())}"
+        )
 
     
     # ── Fit and predict per modality ──────────────────────────────────────────=
@@ -170,7 +172,7 @@ def get_desynch_stats(
     modality2="ATAC",
     embedding1="DM_EigenVectors_RNA",
     embedding2="DM_EigenVectors_ATAC",
-    extra_ncells_layers=[],
+    extra_ncells_layers=None,
     eps=1e-16,
 ):
     """Compute per-feature desynchronization statistics between two modalities, grouped by a cell annotation.
@@ -214,6 +216,9 @@ def get_desynch_stats(
         {layer}_var_{c}                        : Variance of layer values in group.
         var_explained_diff_{layer}_{c}         : MSE difference normalized by layer variance.
     """
+
+    if extra_ncells_layers is None:
+        extra_ncells_layers = []
 
     # ── Compute total variance across the layer ────────────────────────────────
 
@@ -393,10 +398,11 @@ def make_null_layer(ad, layer, random_state=0):
     Adds ad.layers[f"{layer}_null"] containing the shuffled values.
     """
 
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. "
-        f"Available layers: {list(ad.layers.keys())}"
-    )
+    if layer not in ad.layers:
+        raise KeyError(
+            f"Layer '{layer}' not found in ad.layers. "
+            f"Available layers: {list(ad.layers.keys())}"
+        )
 
     vals = ad.layers[layer]
     is_sparse = sparse.issparse(vals)
@@ -479,20 +485,23 @@ def run_null_desynch_test(
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. "
-        f"Available layers: {list(ad.layers.keys())}"
-    )
+    if layer not in ad.layers:
+        raise KeyError(
+            f"Layer '{layer}' not found in ad.layers. "
+            f"Available layers: {list(ad.layers.keys())}"
+        )
 
     varm_key = f"reconstruction_results_{layer}"
-    assert varm_key in ad.varm, (
-        f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
-    )
+    if varm_key not in ad.varm:
+        raise KeyError(
+            f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
+        )
 
-    assert obs_col in ad.obs.columns, (
-        f"'{obs_col}' not found in ad.obs. "
-        f"Available columns: {list(ad.obs.columns)}"
-    )
+    if obs_col not in ad.obs.columns:
+        raise KeyError(
+            f"'{obs_col}' not found in ad.obs. "
+            f"Available columns: {list(ad.obs.columns)}"
+        )
 
     # ── Validate observed columns exist before running null pipeline ───────────
 
@@ -881,9 +890,10 @@ def get_reconstruction_results(ad, layer, grouping, group, min_cells=None):
     """
 
     varm_key = f"reconstruction_results_{layer}"
-    assert varm_key in ad.varm, (
-        f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
-    )
+    if varm_key not in ad.varm:
+        raise KeyError(
+            f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
+        )
 
     res = ad.varm[varm_key]
 
@@ -892,10 +902,11 @@ def get_reconstruction_results(ad, layer, grouping, group, min_cells=None):
     pattern    = re.compile(rf"_{re.escape(grouping)}_{re.escape(group)}(_|$)")
     group_cols = [col for col in res.columns if pattern.search(col)]
 
-    assert len(group_cols) > 0, (
-        f"No columns found for grouping='{grouping}', group='{group}' in {varm_key}. "
-        f"Available groups: {ad.obs[grouping].unique().tolist()}"
-    )
+    if len(group_cols) == 0:
+        raise KeyError(
+            f"No columns found for grouping='{grouping}', group='{group}' in {varm_key}. "
+            f"Available groups: {ad.obs[grouping].unique().tolist()}"
+        )
 
     res = res[group_cols]
 

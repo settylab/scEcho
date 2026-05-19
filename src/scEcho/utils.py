@@ -125,17 +125,19 @@ def plot_branch_comp(
         pseudotime_col = f"pseudotime_{modality2}"
         warnings.warn(f"No pseudotime column set, defaulting to '{pseudotime_col}'.")
 
-    assert pseudotime_col in ad.obs.columns, (
-        f"Pseudotime column '{pseudotime_col}' not found in ad.obs. "
-        f"Run Palantir first or specify a valid pseudotime_col."
-    )
+    if pseudotime_col not in ad.obs.columns:
+        raise KeyError(
+            f"Pseudotime column '{pseudotime_col}' not found in ad.obs. "
+            f"Run Palantir first or specify a valid pseudotime_col."
+        )
 
     for modality in [modality1, modality2]:
         branch_col = f"{branch_name}_prob_{modality}"
-        assert branch_col in ad.obs.columns, (
-            f"Branch probability column '{branch_col}' not found in ad.obs. "
-            f"Run run_and_store_pr_res with modality='{modality}' first."
-        )
+        if branch_col not in ad.obs.columns:
+            raise KeyError(
+                f"Branch probability column '{branch_col}' not found in ad.obs. "
+                f"Run run_and_store_pr_res with modality='{modality}' first."
+            )
 
     if color_by is not None:
         in_obs = color_by in ad.obs.columns
@@ -152,10 +154,11 @@ def plot_branch_comp(
             )
         elif in_var:
             if layer is not None:
-                assert layer in ad.layers, (
-                    f"Layer '{layer}' not found in ad.layers. "
-                    f"Available layers: {list(ad.layers.keys())}"
-                )
+                if layer not in ad.layers:
+                    raise KeyError(
+                        f"Layer '{layer}' not found in ad.layers. "
+                        f"Available layers: {list(ad.layers.keys())}"
+                    )
 
     # ── Build figure ──────────────────────────────────────────────────────────
 

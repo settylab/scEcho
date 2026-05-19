@@ -15,7 +15,7 @@ def try_models(
     sigmas,
     layer,
     embeddings=("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
-    name_dict={"DM_EigenVectors_RNA":"RNA", "DM_EigenVectors_ATAC":"ATAC"},
+    name_dict=None,
     loo_residuals=True,
     groups=None,
     test_frac=0.2,
@@ -66,21 +66,24 @@ def try_models(
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. "
-        f"Available layers: {list(ad.layers.keys())}"
-    )
-
-    if groups is not None:
-        assert groups in ad.obs.columns, (
-            f"groups column '{groups}' not found in ad.obs. "
-            f"Available columns: {list(ad.obs.columns)}"
+    if layer not in ad.layers:
+        raise KeyError(
+            f"Layer '{layer}' not found in ad.layers. "
+            f"Available layers: {list(ad.layers.keys())}"
         )
 
+    if groups is not None:
+        if groups not in ad.obs.columns:
+            raise KeyError(
+                f"groups column '{groups}' not found in ad.obs. "
+                f"Available columns: {list(ad.obs.columns)}"
+            )
+
     missing_embeddings = [e for e in embeddings if e not in ad.obsm]
-    assert len(missing_embeddings) == 0, (
-        f"The following embeddings are missing from ad.obsm:\n\t{missing_embeddings}"
-    )
+    if len(missing_embeddings) != 0:
+        raise KeyError(
+            f"The following embeddings are missing from ad.obsm:\n\t{missing_embeddings}"
+        )
 
     if isinstance(embeddings, str):
         embeddings = (embeddings,)
@@ -115,7 +118,7 @@ def try_models(
     # ── Resolve name dict ─────────────────────────────────────────────────────
 
     if name_dict is None:
-        name_dict = {}
+        name_dict = {"DM_EigenVectors_RNA": "RNA", "DM_EigenVectors_ATAC": "ATAC"}
     for e in embeddings:
         if e not in name_dict:
             name_dict[e] = e
@@ -222,10 +225,11 @@ def read_test_results(ad, layer):
         if col.startswith(f"predicted_{layer}_") and ("_error_var_ratio_train" in col or "_error_var_ratio_test" in col)
     ]
 
-    assert len(mse_cols) > 0, (
-        f"No variance explained columns found for layer '{layer}'. "
-        f"Run try_models with layer='{layer}' first."
-    )
+    if len(mse_cols) == 0:
+        raise KeyError(
+            f"No variance explained columns found for layer '{layer}'. "
+            f"Run try_models with layer='{layer}' first."
+        )
 
     res = ad.var[mse_cols].melt()
     res.columns = ["variable", "error_var_ratio"]
@@ -282,18 +286,20 @@ def plot_model_heatmap(res, embedding, tr_tst="test", ax=None, figsize=(8, 6)):
 
 
     available_embeddings = res["embedding"].unique()
-    
-    assert embedding in available_embeddings, (
-        f"'{embedding}' not found in res['embedding']. "
-        f"Available embeddings: {available_embeddings.tolist()}"
-    )
 
-    
+    if embedding not in available_embeddings:
+        raise ValueError(
+            f"'{embedding}' not found in res['embedding']. "
+            f"Available embeddings: {available_embeddings.tolist()}"
+        )
+
+
     available_tr_tst = res["tr_tst"].unique()
-    assert tr_tst in available_tr_tst, (
-        f"'{tr_tst}' not found in res['tr_tst']. "
-        f"Available values: {available_tr_tst.tolist()}"
-    )
+    if tr_tst not in available_tr_tst:
+        raise ValueError(
+            f"'{tr_tst}' not found in res['tr_tst']. "
+            f"Available values: {available_tr_tst.tolist()}"
+        )
 
 
     
