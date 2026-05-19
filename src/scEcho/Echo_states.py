@@ -22,7 +22,7 @@ def dn_comp_obsm(
     pval_threshold=0.05,
     log_fold_change_threshold=2,
     ls_factor=2,
-    optimizer = "advi",
+    optimizer=None,
     sample_grouping_col=None,
     sv_min_cells = 200
 ):
@@ -49,7 +49,14 @@ def dn_comp_obsm(
     log_fold_change_threshold : float
         Log fold change threshold for density comparison.
     ls_factor : float
-        Length scale factor for mellon DensityEstimator.
+        Length scale factor for mellon DensityEstimator. ``ls_factor=2``
+        (Mellon default is ``1``) is used because density comparison on
+        diffusion embeddings benefits from a longer kernel length scale.
+    optimizer : str or None, optional
+        Optimizer for the Mellon density inference. ``None`` defers to
+        Mellon's recommended ``L-BFGS-B``; pass ``optimizer='advi'`` to use
+        stochastic variational inference (slower, useful for very large
+        datasets).
     sample_grouping_col : str, optional
         Column for sample groupings. If specified, includes sample variance.
 
@@ -105,13 +112,19 @@ def dn_comp_obsm(
     for modality, space in (pbar := tqdm(zip(modalities, spaces), total=2)):
         pbar.set_description(f"Fitting density for space {modality}")
 
-        model = mellon.DensityEstimator(
+        estimator_kwargs = dict(
             predictor_with_uncertainty=True,
-            optimizer=optimizer,
             d=d_use,
             ls_factor=ls_factor,
         )
+        if optimizer is not None:
+            estimator_kwargs["optimizer"] = optimizer
 
+        model = mellon.DensityEstimator(**estimator_kwargs)
+
+        # Mellon 1.7.1 has no combined "predict + uncertainty" call: fit_predict
+        # returns the inferred latent log-density at training points, then
+        # uncertainty(space) is a separate posterior covariance evaluation.
         ad.obs[f"log_density_{modality}"]             = model.fit_predict(space)
         ad.obs[f"log_density_{modality}_uncertainty"] = model.predict.uncertainty(space)
     
