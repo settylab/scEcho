@@ -1,9 +1,19 @@
-__version__ = "0.0.5"
-__author__  = "Connor Finkbeiner"
+from importlib.metadata import PackageNotFoundError, version
 
-from . import Echo_states
-from . import Echo_features
-from . import plotting
-from . import try_models
-from . import utils
-from . import test_components
+try:
+    __version__ = version("scEcho")
+except PackageNotFoundError:
+    __version__ = "0.0.0+local"
+
+__author__ = "Connor Finkbeiner"
+
+from . import echo_features, echo_states, plotting, utils
+
+__all__ = [
+    "echo_states",
+    "echo_features",
+    "plotting",
+    "utils",
+    "__version__",
+    "__author__",
+]

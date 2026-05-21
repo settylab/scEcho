@@ -1,15 +1,32 @@
+from __future__ import annotations
+
+import logging
+import re
 import warnings
+from typing import Optional, Sequence, Union
+
+import anndata
 import mellon
 import numpy as np
 import pandas as pd
-import scipy.sparse as sparse
-from tqdm.auto import tqdm
 import scipy
+import scipy.sparse as sparse
 from kompot.utils import compute_mahalanobis_distances
-from statsmodels.stats.multitest import multipletests
 from pandas.api.types import CategoricalDtype
 from scipy.stats import norm as normal
-import re
+from statsmodels.stats.multitest import multipletests
+from tqdm.auto import tqdm
+
+__all__ = [
+    "embeddings_predict_layer",
+    "get_desynch_stats",
+    "make_null_layer",
+    "run_null_desynch_test",
+    "run_echo_features",
+    "get_reconstruction_results",
+]
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -33,16 +50,18 @@ def compute_ncells(ad_sub, layer_key, col_name, res):
 
 
 def embeddings_predict_layer(
-    ad,
-    ls=None,
-    ls_factor=10,
-    sigma=0.1,
-    embeddings=("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
-    layer=None,
-    gp_type=None,
+    ad: anndata.AnnData,
+    ls: Optional[float] = None,
+    ls_factor: float = 10,
+    sigma: float = 0.1,
+    embeddings: Union[str, Sequence[str]] = ("DM_EigenVectors_RNA", "DM_EigenVectors_ATAC"),
+    layer: Optional[str] = None,
+    gp_type: Optional[str] = None,
     # loo_residuals = True,
-    save_obs_variance=True
-):
+    save_obs_variance: bool = True,
+    save_predictions: bool = True,
+    save_covariance: bool = True,
+) -> None:
     """Impute a layer in ad.layers over a given space (or spaces) using a Gaussian process.
 
     Parameters
@@ -52,7 +71,10 @@ def embeddings_predict_layer(
     ls : float, optional
         Length scale of the estimator.
     ls_factor : float
-        Length scale factor.
+        Length scale factor. ``ls_factor=10`` (Mellon default is ``1``) is
+        used because GP imputation of single-cell features on diffusion
+        embeddings benefits from a substantially longer length scale to
+        smooth across sparse measurements.
     sigma : float
         Prior on the standard deviation of the features in the layer.
     embeddings : str, tuple, or list
@@ -61,12 +83,22 @@ def embeddings_predict_layer(
         Key in ad.layers containing the values to impute. Pass None to use ad.X.
     gp_type : optional
         Gaussian process type passed to mellon.FunctionEstimator.
+    save_predictions : bool, default True
+        If False, skip writing the per-modality prediction to
+        ``ad.layers[f"predicted_{layer}_{m}_space"]``. Disable to avoid an
+        ``(n_cells, n_features)`` write per modality when downstream code
+        does not need the imputed layer.
+    save_covariance : bool, default True
+        If False, skip writing the per-modality posterior covariance to
+        ``ad.obsp[f"predicted_{layer}_{m}_space_uncertainty"]``. Disable to
+        avoid an ``(n_cells, n_cells)`` write per modality per layer
+        (~800 MB per entry at 10k cells, scaling quadratically).
 
     Returns
     -------
     Updates ad in place with the following keys per modality:
-        ad.layers[f"predicted_{layer_name}_{m}_space"]           : Imputed layer values.
-        ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] : Full covariance matrix.
+        ad.layers[f"predicted_{layer_name}_{m}_space"]           : Imputed layer values (if save_predictions).
+        ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] : Full covariance matrix (if save_covariance).
         ad.layers[f"predicted_{layer_name}_{m}_space_residuals"] : LOO squared residuals.
     """
 
@@ -78,10 +110,11 @@ def embeddings_predict_layer(
         data       = ad.X
         layer_name = "X"
     else:
-        assert layer in ad.layers, (
-            f"Layer '{layer}' not found in ad.layers. "
-            f"Available layers: {list(ad.layers.keys())}"
-        )
+        if layer not in ad.layers:
+            raise KeyError(
+                f"Layer '{layer}' not found in ad.layers. "
+                f"Available layers: {list(ad.layers.keys())}"
+            )
         data       = ad.layers[layer]
         layer_name = layer
 
@@ -92,10 +125,11 @@ def embeddings_predict_layer(
         embeddings = (embeddings,)
     
     missing_embeddings = [m for m in embeddings if m not in ad.obsm]
-    assert len(missing_embeddings) == 0, (
-        f"The following embeddings are missing from ad.obsm:\n\t{missing_embeddings}\n"
-        f"Available keys: {list(ad.obsm.keys())}"
-    )
+    if len(missing_embeddings) != 0:
+        raise KeyError(
+            f"The following embeddings are missing from ad.obsm:\n\t{missing_embeddings}\n"
+            f"Available keys: {list(ad.obsm.keys())}"
+        )
 
     
     # ── Fit and predict per modality ──────────────────────────────────────────=
@@ -113,12 +147,14 @@ def embeddings_predict_layer(
 
         fest.fit(ad.obsm[m], data)
 
-        ad.layers[f"predicted_{layer_name}_{m}_space"] = np.asarray(
-            fest.predict(ad.obsm[m])
-        )
-        ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] = np.asarray(
-            fest.predict.covariance(ad.obsm[m], diag=False)
-        )
+        if save_predictions:
+            ad.layers[f"predicted_{layer_name}_{m}_space"] = np.asarray(
+                fest.predict(ad.obsm[m])
+            )
+        if save_covariance:
+            ad.obsp[f"predicted_{layer_name}_{m}_space_uncertainty"] = np.asarray(
+                fest.predict.covariance(ad.obsm[m], diag=False)
+            )
         
         
         
@@ -144,18 +180,66 @@ def embeddings_predict_layer(
     
 
 
-    
-def get_desynch_stats(
+
+
+def _compute_group_mhd_and_stats(
     ad,
-    obs_col,
+    ind,
     layer,
-    modality1="RNA",
-    modality2="ATAC",
-    embedding1="DM_EigenVectors_RNA",
-    embedding2="DM_EigenVectors_ATAC",
-    extra_ncells_layers=[],
-    eps=1e-16,
+    layer_for_lfc,
+    embedding1,
+    embedding2,
+    diagonal_variance,
 ):
+    """Per-group Mahalanobis distance with graceful fallback when covariance keys are absent.
+
+    Pulled out of ``get_desynch_stats`` and ``run_null_desynch_test`` to remove
+    ~80 LOC of duplication and the silent-divergence risk between the two
+    near-identical blocks.
+
+    ``layer`` is the namespace of the predicted-space uncertainty keys in
+    ``ad.obsp`` (e.g. ``layer`` for the observed pass, ``null_layer`` for the
+    null pass). ``layer_for_lfc`` is the namespace of the precomputed LFC layer
+    in ``ad.layers`` (always the *observed* layer in current call sites, since
+    the null path reuses the observed LFC values against the null covariance).
+
+    Returns either a ``float64`` ``(n_group,)`` array of Mahalanobis distances,
+    or ``np.nan`` (with a ``UserWarning``) when the predicted-covariance keys
+    for either embedding are not present in ``ad.obsp``.
+    """
+    unc_key1 = f"predicted_{layer}_{embedding1}_space_uncertainty"
+    unc_key2 = f"predicted_{layer}_{embedding2}_space_uncertainty"
+    if (unc_key1 in ad.obsp) and (unc_key2 in ad.obsp):
+        ix = np.ix_(ind.values, ind.values)
+        unc1 = ad.obsp[unc_key1][ix]
+        unc2 = ad.obsp[unc_key2][ix]
+        # Kompot handles Cholesky stabilization internally (eps=1e-8 default).
+        return compute_mahalanobis_distances(
+            diff_values=ad[ind].layers[f"predicted_{layer_for_lfc}_LFC_{embedding1}_v_{embedding2}"].T,
+            covariance=unc1 + unc2,
+            diagonal_variance=diagonal_variance,
+        )
+    missing_unc = [k for k in [unc_key1, unc_key2] if k not in ad.obsp]
+    warnings.warn(
+        f"Posterior covariance keys not found in ad.obsp — Mahalanobis "
+        f"distance skipped for this group. To enable, rerun "
+        f"embeddings_predict_layer with save_covariance=True.\n"
+        f"\tMissing: {missing_unc}"
+    )
+    return np.nan
+
+
+def get_desynch_stats(
+    ad: anndata.AnnData,
+    obs_col: str,
+    layer: str,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    embedding1: str = "DM_EigenVectors_RNA",
+    embedding2: str = "DM_EigenVectors_ATAC",
+    extra_ncells_layers: Optional[Union[str, Sequence[str]]] = None,
+    eps: float = 1e-16,
+) -> None:
     """Compute per-feature desynchronization statistics between two modalities, grouped by a cell annotation.
 
     For each group in obs_col, computes mean squared error of each embedding's reconstruction,
@@ -197,6 +281,9 @@ def get_desynch_stats(
         {layer}_var_{c}                        : Variance of layer values in group.
         var_explained_diff_{layer}_{c}         : MSE difference normalized by layer variance.
     """
+
+    if extra_ncells_layers is None:
+        extra_ncells_layers = []
 
     # ── Compute total variance across the layer ────────────────────────────────
 
@@ -271,21 +358,14 @@ def get_desynch_stats(
             )
             diagonal_variance = None
         
-        # Model uncertainty
-
-        unc1 = ad[ind].obsp[f"predicted_{layer}_{embedding1}_space_uncertainty"]
-        unc2 = ad[ind].obsp[f"predicted_{layer}_{embedding2}_space_uncertainty"]
-
-        
-        
-        # ── Mahalanobis distance ───────────────────────────────────────────────
-        res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
-            diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-            covariance=unc1 + unc2 + 1e-16,
-            diagonal_variance=diagonal_variance,
+        # Model uncertainty + Mahalanobis distance (guarded against missing
+        # obsp keys when save_covariance=False was passed to
+        # embeddings_predict_layer).
+        res[f"MHD_{obs_col}_{c}_{modality1}_vs_{modality2}"] = _compute_group_mhd_and_stats(
+            ad, ind, layer, layer, embedding1, embedding2, diagonal_variance,
         )
-        
-        
+
+
 
         # ── Additional per-group layer statistics ──────────────────────────────
 
@@ -301,13 +381,11 @@ def get_desynch_stats(
             
             
             
-        # mean feature values for base layer 
+        # mean feature values for base layer
         res[f"mean_val_{obs_col}_{c}"] = ad[ind].layers[layer].mean(axis=0).T
 
-        if sparse.issparse(ad[ind].layers[layer]):
-            layer_vals = ad[ind].layers[layer].toarray()
-        else:
-            layer_vals = ad[ind].layers[layer]
+        # reuse the dense layer materialized once above the loop
+        layer_vals = arr[ind.values]
 
         res[f"{layer}_var_{obs_col}_{c}"] = layer_vals.var(axis=0)
         
@@ -345,7 +423,7 @@ def get_desynch_stats(
 
         
         
-def make_null_layer(ad, layer, random_state=0):
+def make_null_layer(ad: anndata.AnnData, layer: str, random_state: int = 0) -> None:
     """Create a null layer by randomly shuffling layer values across cells per feature.
 
     Parameters
@@ -362,10 +440,11 @@ def make_null_layer(ad, layer, random_state=0):
     Adds ad.layers[f"{layer}_null"] containing the shuffled values.
     """
 
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. "
-        f"Available layers: {list(ad.layers.keys())}"
-    )
+    if layer not in ad.layers:
+        raise KeyError(
+            f"Layer '{layer}' not found in ad.layers. "
+            f"Available layers: {list(ad.layers.keys())}"
+        )
 
     vals = ad.layers[layer]
     is_sparse = sparse.issparse(vals)
@@ -394,21 +473,24 @@ def make_null_layer(ad, layer, random_state=0):
 
 
 def run_null_desynch_test(
-    ad,
-    obs_col,
-    layer,
-    ls=None,
-    ls_factor=10,
-    sigma=0.1,
-    modality1="RNA",
-    modality2="ATAC",
-    embedding1="DM_EigenVectors_RNA",
-    embedding2="DM_EigenVectors_ATAC",
-    p_val_threshold=0.05,
-    random_state=0,
-    min_cells=50,
-    eps=1e-16
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    layer: str,
+    ls: Optional[float] = None,
+    ls_factor: float = 10,
+    sigma: float = 0.1,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    embedding1: str = "DM_EigenVectors_RNA",
+    embedding2: str = "DM_EigenVectors_ATAC",
+    p_val_threshold: float = 0.05,
+    random_state: int = 0,
+    min_cells: int = 50,
+    eps: float = 1e-16,
+    save_predictions: bool = True,
+    save_covariance: bool = True,
+    direction_colors: Sequence[str] = ("#ff7f0e", "#1f77b4", "lightgrey"),
+) -> None:
     """Run a null model test for desynchronization statistics.
 
     Creates a null layer by shuffling feature values across cells, runs the
@@ -432,6 +514,13 @@ def run_null_desynch_test(
         Two-sided p-value threshold for significance.
     random_state : int
         Random seed for null layer shuffling.
+    direction_colors : sequence of str, optional
+        Three colors written to
+        ``ad.uns[f"desynch_direction_{layer}_{modality1}_v_{modality2}_colors"]``,
+        in the order ``({modality2}-structure, {modality1}-structure,
+        not-significant)`` to match the ordered ``CategoricalDtype`` of the
+        per-feature direction column. Defaults to
+        ``("#ff7f0e", "#1f77b4", "lightgrey")``.
 
     Returns
     -------
@@ -446,20 +535,23 @@ def run_null_desynch_test(
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert layer in ad.layers, (
-        f"Layer '{layer}' not found in ad.layers. "
-        f"Available layers: {list(ad.layers.keys())}"
-    )
+    if layer not in ad.layers:
+        raise KeyError(
+            f"Layer '{layer}' not found in ad.layers. "
+            f"Available layers: {list(ad.layers.keys())}"
+        )
 
     varm_key = f"reconstruction_results_{layer}"
-    assert varm_key in ad.varm, (
-        f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
-    )
+    if varm_key not in ad.varm:
+        raise KeyError(
+            f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
+        )
 
-    assert obs_col in ad.obs.columns, (
-        f"'{obs_col}' not found in ad.obs. "
-        f"Available columns: {list(ad.obs.columns)}"
-    )
+    if obs_col not in ad.obs.columns:
+        raise KeyError(
+            f"'{obs_col}' not found in ad.obs. "
+            f"Available columns: {list(ad.obs.columns)}"
+        )
 
     # ── Validate observed columns exist before running null pipeline ───────────
 
@@ -497,12 +589,19 @@ def run_null_desynch_test(
             layer=null_layer,
             ls=ls,
             ls_factor=ls_factor,
-            sigma=sigma
+            sigma=sigma,
+            save_predictions=save_predictions,
+            save_covariance=save_covariance,
         )
 
     # ── Compute null var_explained_diff per group ─────────────────────────────
 
     res = ad.varm[varm_key]
+
+    # materialize null layer once before the per-group loop
+    null_arr = ad.layers[null_layer]
+    if sparse.issparse(null_arr):
+        null_arr = null_arr.toarray()
 
     for c in (pbar := tqdm(groups)):
         pbar.set_description(f"Computing null distribution: {obs_col}: {c}")
@@ -524,27 +623,25 @@ def run_null_desynch_test(
         # save raw null MSE difference — column name includes group identifier
         res[f"MSE_null_diff_{obs_col}_{c}"] = mse_null_diff
 
-        # null layer variance in group
-        if sparse.issparse(ad[ind].layers[null_layer]):
-            null_vals = ad[ind].layers[null_layer].toarray()
-        else:
-            null_vals = ad[ind].layers[null_layer]
+        # null layer variance in group — slice the dense matrix hoisted above
+        null_vals = null_arr[ind.values]
 
         null_var = null_vals.var(axis=0)
 
-        # null var explained diff — column name includes group identifier
+        # null var explained diff — column name includes group identifier.
+        # Zero-variance features yield inf / NaN here; that is expected and they
+        # are excluded by ``expressed_mask`` below, so silence the divide
+        # warnings rather than surface noise the algorithm already handles.
         null_col = f"var_explained_diff_{layer}_null_{obs_col}_{c}"
-        res[null_col] = mse_null_diff / null_var
+        with np.errstate(divide="ignore", invalid="ignore"):
+            res[null_col] = mse_null_diff / null_var
 
         # ── Null distribution summary statistics ──────────────────────────────
 
+        # Zero-variance features are filtered silently — the user does not need
+        # to be told per-group; the count is recoverable from the layer if
+        # needed.
         expressed_mask = null_var > 0
-        n_excluded     = (~expressed_mask).sum()
-        if n_excluded > 0:
-            warnings.warn(
-                f"{n_excluded} features have zero variance in group '{c}' of layer '{null_layer}' "
-                f"and will be excluded from null mean/SD calculation."
-            )
 
         null_vals_expressed = res.loc[expressed_mask, null_col]
         null_mean           = null_vals_expressed.mean()
@@ -620,27 +717,19 @@ def run_null_desynch_test(
             )
             diagonal_variance = None
         
-        # Model uncertainty
-
-        unc1 = ad[ind].obsp[f"predicted_{null_layer}_{embedding1}_space_uncertainty"]
-        unc2 = ad[ind].obsp[f"predicted_{null_layer}_{embedding2}_space_uncertainty"]
-
-        
-        diff = ad[ind].layers[f"predicted_{null_layer}_{embedding1}_space_residuals"] - ad[ind].layers[f"predicted_{null_layer}_{embedding2}_space_residuals"]
-        # ── Mahalanobis distance ───────────────────────────────────────────────
-        res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = compute_mahalanobis_distances(
-            diff_values=ad[ind].layers[f"predicted_{layer}_LFC_{embedding1}_v_{embedding2}"].T,
-            covariance=unc1 + unc2 + 1e-16,
-            diagonal_variance=diagonal_variance,
+        # Model uncertainty + Mahalanobis distance against the null covariance.
+        # Uncertainty keys live in the null namespace; the LFC layer is the
+        # observed one (the null pass reuses observed LFC values against the
+        # null covariance).
+        res[f"MHD_null_{obs_col}_{c}_{modality1}_vs_{modality2}"] = _compute_group_mhd_and_stats(
+            ad, ind, null_layer, layer, embedding1, embedding2, diagonal_variance,
         )
         
         
 
     # ── Store direction colors in uns ─────────────────────────────────────────
 
-    ad.uns[f"desynch_direction_{layer}_{modality1}_v_{modality2}_colors"] = [
-        "#ff7f0e", "#1f77b4", "lightgrey"
-    ]
+    ad.uns[f"desynch_direction_{layer}_{modality1}_v_{modality2}_colors"] = list(direction_colors)
 
 
 
@@ -649,22 +738,24 @@ def run_null_desynch_test(
 
 
 def run_echo_features(
-    ad,
-    obs_col,
-    layers,
-    embedding1="DM_EigenVectors_RNA",
-    embedding2="DM_EigenVectors_ATAC",
-    modality1="RNA",
-    modality2="ATAC",
-    sigma=0.1,
-    ls=None,
-    ls_factor=10,
-    p_val_threshold=0.05,
-    random_state=0,
-    min_cells=50,
-    eps=1e-16,
-    verbose=True,
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    layers: Union[str, Sequence[str]],
+    embedding1: str = "DM_EigenVectors_RNA",
+    embedding2: str = "DM_EigenVectors_ATAC",
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    sigma: float = 0.1,
+    ls: Optional[float] = None,
+    ls_factor: float = 10,
+    p_val_threshold: float = 0.05,
+    random_state: int = 0,
+    min_cells: int = 50,
+    eps: float = 1e-16,
+    verbose: bool = True,
+    save_predictions: bool = True,
+    save_covariance: bool = True,
+) -> None:
     """Run the full desynchronization pipeline across one or more layers.
 
     For each layer in `layers`, this runs the three pipeline steps in order:
@@ -672,7 +763,7 @@ def run_echo_features(
       2. get_desynch_stats         -- compute per-feature desynch statistics
       3. run_null_desynch_test     -- test significance against a null model
 
-    
+
 
     Parameters
     ----------
@@ -691,7 +782,10 @@ def run_echo_features(
     ls : float or None
         Length scale used for the GP fit. None lets the estimator choose.
     ls_factor : float
-        Length scale factor.
+        Length scale factor. ``ls_factor=10`` (Mellon default is ``1``) is
+        used because GP imputation of single-cell features on diffusion
+        embeddings benefits from a substantially longer length scale to
+        smooth across sparse measurements.
     p_val_threshold : float
         Two-sided p-value threshold for the null test.
     random_state : int
@@ -702,6 +796,18 @@ def run_echo_features(
         Small constant for numerical stability.
     verbose : bool
         Print progress per layer.
+    save_predictions : bool, default True
+        Forwarded to :func:`embeddings_predict_layer`. If False, skip
+        writing the imputed layer to ``ad.layers`` to avoid an
+        ``(n_cells, n_features)`` write per modality.
+    save_covariance : bool, default True
+        Forwarded to :func:`embeddings_predict_layer`. If False, skip
+        writing the posterior covariance to ``ad.obsp`` to avoid an
+        ``(n_cells, n_cells)`` write per modality per layer
+        (~800 MB per entry at 10k cells, scaling quadratically). Note that
+        downstream Mahalanobis-distance steps in :func:`get_desynch_stats`
+        and :func:`run_null_desynch_test` require the covariance entries —
+        disabling this kwarg precludes running the full pipeline.
 
     Returns
     -------
@@ -723,12 +829,11 @@ def run_echo_features(
                 f"Available layers: {list(ad.layers.keys())}"
             )
 
-        if verbose:
-            print(f"[run_desynch_full] Processing layer: '{layer}'")
+        log = logger.info if verbose else logger.debug
+        log("[run_desynch_full] Processing layer: '%s'", layer)
 
         # 1. Impute the layer over both embedding spaces.
-        if verbose:
-            print("  - embeddings_predict_layer")
+        log("  - embeddings_predict_layer")
         embeddings_predict_layer(
             ad,
             embeddings=embeddings,
@@ -736,11 +841,12 @@ def run_echo_features(
             ls=ls,
             ls_factor=ls_factor,
             layer=layer,
+            save_predictions=save_predictions,
+            save_covariance=save_covariance,
         )
 
         # 2. Per-feature desynchronization statistics.
-        if verbose:
-            print("  - get_desynch_stats")
+        log("  - get_desynch_stats")
         get_desynch_stats(
             ad,
             obs_col=obs_col,
@@ -753,8 +859,7 @@ def run_echo_features(
         )
 
         # 3. Null model significance test.
-        if verbose:
-            print("  - run_null_desynch_test")
+        log("  - run_null_desynch_test")
         run_null_desynch_test(
             ad,
             obs_col,
@@ -770,17 +875,24 @@ def run_echo_features(
             random_state=random_state,
             min_cells=min_cells,
             eps=eps,
+            save_predictions=save_predictions,
+            save_covariance=save_covariance,
         )
 
-        if verbose:
-            print(f"[run_desynch_full] Done with layer: '{layer}'")
+        log("[run_desynch_full] Done with layer: '%s'", layer)
 
 
 
 
 
 
-def get_reconstruction_results(ad, layer, grouping, group, min_cells=None):
+def get_reconstruction_results(
+    ad: anndata.AnnData,
+    layer: str,
+    grouping: str,
+    group: str,
+    min_cells: Optional[int] = None,
+) -> pd.DataFrame:
     """Pull reconstruction results for a specific group from ad.varm.
 
     Parameters
@@ -805,9 +917,10 @@ def get_reconstruction_results(ad, layer, grouping, group, min_cells=None):
     """
 
     varm_key = f"reconstruction_results_{layer}"
-    assert varm_key in ad.varm, (
-        f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
-    )
+    if varm_key not in ad.varm:
+        raise KeyError(
+            f"'{varm_key}' not found in ad.varm. Run get_desynch_stats first."
+        )
 
     res = ad.varm[varm_key]
 
@@ -816,10 +929,11 @@ def get_reconstruction_results(ad, layer, grouping, group, min_cells=None):
     pattern    = re.compile(rf"_{re.escape(grouping)}_{re.escape(group)}(_|$)")
     group_cols = [col for col in res.columns if pattern.search(col)]
 
-    assert len(group_cols) > 0, (
-        f"No columns found for grouping='{grouping}', group='{group}' in {varm_key}. "
-        f"Available groups: {ad.obs[grouping].unique().tolist()}"
-    )
+    if len(group_cols) == 0:
+        raise KeyError(
+            f"No columns found for grouping='{grouping}', group='{group}' in {varm_key}. "
+            f"Available groups: {ad.obs[grouping].unique().tolist()}"
+        )
 
     res = res[group_cols]
 

@@ -22,3 +22,10 @@ notebooks/core
 notebooks/D59_retina.h5ad
 notebooks/.ipynb_checkpoints/example-checkpoint.ipynb
 scecho_package.zip
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/

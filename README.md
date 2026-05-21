@@ -37,7 +37,40 @@ To install a specific tagged version:
 pip install git+https://github.com/settylab/scEcho.git@v0.0.5
 ```
 
+If the install hangs or fails while building `h5py` from sdist (the host is
+missing system `libhdf5`), force pip to pick a wheel:
 
+```bash
+pip install --only-binary=:all: git+https://github.com/settylab/scEcho.git
+```
+
+### Development install
+
+```bash
+git clone https://github.com/settylab/scEcho.git
+cd scEcho
+pip install -e ".[dev]"
+```
+
+## Modules
+
+Imported as `import scEcho`:
+
+- `echo_states` — per-modality density estimation and cross-modality density
+  comparison; writes per-cell direction labels into `.obs`.
+- `echo_features` — feature-level desynchronization pipeline (imputation,
+  per-feature statistics, null-model significance testing).
+- `plotting` — visualization (volcano plots, linked side-by-side embeddings,
+  per-group direction fractions).
+- `utils` — Palantir wrapper, embedding-depth regression, AnnData layer
+  helpers, Mellon GP hyperparameter sweep, and diffusion-component sweep.
+
+## Usage
+
+See [`notebooks/example.ipynb`](notebooks/example.ipynb) for the canonical end-to-end pipeline. The basic
+shape is `scEcho.echo_states.dn_comp_obsm(adata, ...)` followed by
+`scEcho.echo_features.run_echo_features(adata, ...)`; see each function's
+docstring for the required `.obsm` / `.obs` / `.layers` keys.
 
 ## License
 

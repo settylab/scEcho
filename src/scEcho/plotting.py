@@ -1,39 +1,64 @@
-import seaborn as sns
-import plotly.express as px
+from __future__ import annotations
+
+import warnings
+from typing import Optional, Sequence, Union
+
+import anndata
 import matplotlib.pyplot as plt
-from adjustText import adjust_text
-from matplotlib.collections import LineCollection
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
+import plotly.express as px
 import scanpy as sc
 import scipy.sparse as sparse
-import warnings
+import seaborn as sns
+from adjustText import adjust_text
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
+from matplotlib.figure import Figure
+from pandas.api.types import is_numeric_dtype
 
+__all__ = [
+    "plot_scores",
+    "plot_direction_fractions",
+    "plot_SE",
+    "linked_plot",
+    "plot_desynchronized_state_volcano",
+    "rotate_coords",
+]
+
+
+# Defaults forwarded to ``adjustText.adjust_text`` from ``plot_scores``. Lifted
+# out of the call site so callers can override any key (e.g. arrowprops style,
+# additional repulsion knobs) via the ``**adjust_text_kwargs`` catch-all on
+# ``plot_scores`` — keys passed by the caller override these defaults.
+_DEFAULT_ADJUST_TEXT_KWARGS = {
+    "arrowprops": {"arrowstyle": "-", "color": "black", "lw": 0.5},
+}
 
 
 def plot_scores(
-    ad,
-    obs_col,
-    c,
-    layer,
-    modality1="RNA",
-    modality2="ATAC",
-    ncells_cutoff=20,
-    ncells_layer=None,
-    interactive=False,
-    s=5,
-    features_label=None,
-    features_highlight=None,
-    n_features_label=10,
-    highlight_s_scaling=5,
-    expand=(2.0, 2.0),
-    force_text=(1.5, 1.5),
-    force_points=(0.5, 0.5),
-    max_move_frac=0.1,
-    iter_lim=1000,
+    ad: anndata.AnnData,
+    obs_col: str,
+    c: str,
+    layer: str,
+    modality1: str = "RNA",
+    modality2: str = "ATAC",
+    ncells_cutoff: int = 20,
+    ncells_layer: Optional[str] = None,
+    interactive: bool = False,
+    s: float = 5,
+    features_label: Optional[Union[str, Sequence[str]]] = None,
+    features_highlight: Optional[Union[str, Sequence[str]]] = None,
+    n_features_label: Optional[int] = 10,
+    highlight_s_scaling: float = 5,
+    expand: tuple = (2.0, 2.0),
+    force_text: tuple = (1.5, 1.5),
+    force_points: tuple = (0.5, 0.5),
+    max_move_frac: float = 0.1,
+    iter_lim: int = 1000,
+    show: bool = True,
     **adjust_text_kwargs,
-):
+) -> Optional[Axes]:
     # ── Resolve column names ───────────────────────────────────────────────────
 
     if ncells_layer is None:
@@ -141,7 +166,9 @@ def plot_scores(
                 hover_name="feature",
             )
         fig.update_layout(autosize=False, width=1000, height=800, legend_title=None)
-        fig.show()
+        if show:
+            fig.show()
+        return fig
 
     else:
         ax = sns.scatterplot(
@@ -194,13 +221,12 @@ def plot_scores(
                 x=plot_df[var_exp_col].values,
                 y=plot_df[MHD_col].values,
                 ax=ax,
-                arrowprops=dict(arrowstyle="-", color="black", lw=0.5),
                 expand=expand,
                 force_text=force_text,
                 force_points=force_points,
                 max_move=max_move,
                 iter_lim=iter_lim,
-                **adjust_text_kwargs,
+                **{**_DEFAULT_ADJUST_TEXT_KWARGS, **adjust_text_kwargs},
             )
 
         return ax
@@ -210,25 +236,27 @@ def plot_scores(
     
 
 def plot_direction_fractions(
-    ad,
-    obs_col,
-    modality1_name="RNA",
-    modality2_name="ATAC",
-    figsize=None,
-    ax=None,
-):
+    ad: anndata.AnnData,
+    obs_col: str,
+    modality1_name: str = "RNA",
+    modality2_name: str = "ATAC",
+    figsize: Optional[tuple] = None,
+    ax: Optional[Axes] = None,
+) -> Axes:
     
     direction_col   = f"direction_{modality1_name}_v_{modality2_name}"
     colors_key      = f"{direction_col}_colors"
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert direction_col in ad.obs.columns, (
-        f"'{direction_col}' not found in ad.obs. Run dn_comp_obsm first."
-    )
-    assert colors_key in ad.uns, (
-        f"'{colors_key}' not found in ad.uns. Run dn_comp_obsm first."
-    )
+    if direction_col not in ad.obs.columns:
+        raise KeyError(
+            f"'{direction_col}' not found in ad.obs. Run dn_comp_obsm first."
+        )
+    if colors_key not in ad.uns:
+        raise KeyError(
+            f"'{colors_key}' not found in ad.uns. Run dn_comp_obsm first."
+        )
 
     # ── Compute fractions ─────────────────────────────────────────────────────
 
@@ -275,15 +303,17 @@ def plot_direction_fractions(
     
 
             
-def plot_SE(ad,
-            gn,
-            prc_clip = 100,
-            b = "umap",
-            prc_clip_FC = 95,
-            so = False,
-            pre_imputed_layer = "logcounts",
-            emb1 = "DM_EigenVectors_RNA",
-            emb2 = "DM_EigenVectors_ATAC"):
+def plot_SE(
+    ad: anndata.AnnData,
+    gn: str,
+    prc_clip: float = 100,
+    b: str = "umap",
+    prc_clip_FC: float = 95,
+    so: bool = False,
+    pre_imputed_layer: str = "logcounts",
+    emb1: str = "DM_EigenVectors_RNA",
+    emb2: str = "DM_EigenVectors_ATAC",
+) -> None:
     
     
     
@@ -389,12 +419,12 @@ def plot_SE(ad,
 
 
 def rotate_coords(
-    coords,
-    degrees,
-    rotate_around=np.zeros(2),
-    flip_x=False,
-    flip_y=False,
-):
+    coords: np.ndarray,
+    degrees: float,
+    rotate_around: np.ndarray = np.zeros(2),
+    flip_x: bool = False,
+    flip_y: bool = False,
+) -> np.ndarray:
     """Rotate (and optionally flip) 2D coordinates.
 
     Parameters
@@ -565,28 +595,28 @@ def make_points_df(
 
 
 def linked_plot(
-    obj1,
-    embedding1,
-    embedding2,
-    modality1_name=None,
-    modality2_name=None,
-    color_by=None,
-    layer=None,
-    vmin=None,
-    vmax=None,
-    offset=None,
-    figsize=(8, 12),
-    pt_size=10,
-    border_thickness=0,
-    pt_size_highlight=None,
-    highlight_border=True,
-    palette=None,
-    title=None,
-    line_thickness=1,
-    line_alpha=0.5,
-    line_mask=[],
-    downsample_lines_frac=0.3,
-):
+    obj1: anndata.AnnData,
+    embedding1: str,
+    embedding2: str,
+    modality1_name: Optional[str] = None,
+    modality2_name: Optional[str] = None,
+    color_by: Optional[str] = None,
+    layer: Optional[str] = None,
+    vmin: Optional[Union[float, str]] = None,
+    vmax: Optional[Union[float, str]] = None,
+    offset: Optional[tuple] = None,
+    figsize: tuple = (8, 12),
+    pt_size: float = 10,
+    border_thickness: float = 0,
+    pt_size_highlight: Optional[float] = None,
+    highlight_border: bool = True,
+    palette: Optional[Union[str, dict]] = None,
+    title: Optional[str] = None,
+    line_thickness: float = 1,
+    line_alpha: float = 0.5,
+    line_mask: Optional[list] = None,
+    downsample_lines_frac: float = 0.3,
+) -> Figure:
     """Plot two embeddings side by side with connecting lines between paired cells.
 
     Parameters
@@ -644,15 +674,19 @@ def linked_plot(
         modality2_name = embedding2
     if color_by is None:
         color_by = "modality"
+    if line_mask is None:
+        line_mask = []
 
     # ── Validate inputs ───────────────────────────────────────────────────────
 
-    assert embedding1 in obj1.obsm, (
-        f"'{embedding1}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
-    )
-    assert embedding2 in obj1.obsm, (
-        f"'{embedding2}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
-    )
+    if embedding1 not in obj1.obsm:
+        raise KeyError(
+            f"'{embedding1}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
+        )
+    if embedding2 not in obj1.obsm:
+        raise KeyError(
+            f"'{embedding2}' not found in obj1.obsm. Available keys: {list(obj1.obsm.keys())}"
+        )
 
     if pt_size_highlight is None:
         pt_size_highlight = pt_size
@@ -669,13 +703,15 @@ def linked_plot(
             f"cannot determine how to color. Rename one to disambiguate."
         )
     elif in_var:
-        assert layer is not None, (
-            f"'{color_by}' is in ad.var_names — a layer must be specified via the layer argument."
-        )
-        assert layer in obj1.layers, (
-            f"Layer '{layer}' not found in ad.layers. "
-            f"Available layers: {list(obj1.layers.keys())}"
-        )
+        if layer is None:
+            raise ValueError(
+                f"'{color_by}' is in ad.var_names — a layer must be specified via the layer argument."
+            )
+        if layer not in obj1.layers:
+            raise KeyError(
+                f"Layer '{layer}' not found in ad.layers. "
+                f"Available layers: {list(obj1.layers.keys())}"
+            )
         vals = obj1[:, color_by].layers[layer]
         if sparse.issparse(vals):
             vals = vals.toarray()
@@ -751,11 +787,13 @@ def linked_plot(
         if bound is None or color_vals is None:
             return bound
         if isinstance(bound, str):
-            assert bound.startswith("p"), (
-                f"String vmin/vmax must be of the form 'p{{number}}' (e.g. 'p5', 'p97.5'). Got: '{bound}'"
-            )
+            if not bound.startswith("p"):
+                raise ValueError(
+                    f"String vmin/vmax must be of the form 'p{{number}}' (e.g. 'p5', 'p97.5'). Got: '{bound}'"
+                )
             q = float(bound[1:])
-            assert 0 <= q <= 100, f"Percentile must be between 0 and 100. Got: {q}"
+            if not (0 <= q <= 100):
+                raise ValueError(f"Percentile must be between 0 and 100. Got: {q}")
             return np.nanpercentile(color_vals, q)
         return bound
 
@@ -821,18 +859,18 @@ def linked_plot(
 
 
 def plot_desynchronized_state_volcano(
-    ad,
-    hue_col,
-    modality1_name="RNA",
-    modality2_name="ATAC",
-    lfc_threshold=0.7,
-    pval_threshold=0.05,
-    palette=None,
-    sig_size=50,
-    bg_color="lightgrey",
-    figsize=None,
-    ax=None,
-):
+    ad: anndata.AnnData,
+    hue_col: str,
+    modality1_name: str = "RNA",
+    modality2_name: str = "ATAC",
+    lfc_threshold: float = 0.7,
+    pval_threshold: float = 0.05,
+    palette: Optional[Union[str, dict]] = None,
+    sig_size: float = 50,
+    bg_color: str = "lightgrey",
+    figsize: Optional[tuple] = None,
+    ax: Optional[Axes] = None,
+) -> Axes:
     """Volcano-style plot of density-comparison results.
 
     Plots the density log-fold change between two modalities against its
@@ -883,9 +921,10 @@ def plot_desynchronized_state_volcano(
     # ── Validate inputs ───────────────────────────────────────────────────────
 
     for col in (direction_col, x_col, y_col, hue_col):
-        assert col in ad.obs.columns, (
-            f"'{col}' not found in ad.obs. Run the density comparison first."
-        )
+        if col not in ad.obs.columns:
+            raise KeyError(
+                f"'{col}' not found in ad.obs. Run the density comparison first."
+            )
 
     # ── Resolve palette ───────────────────────────────────────────────────────
 
